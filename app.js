@@ -9,7 +9,7 @@
 
 // >>> WAJIB ISI URL WEB APP APPS SCRIPT ANDA DI SINI (BERAKHIRAN /exec) <<<
 // Contoh: 'https://script.google.com/macros/s/AKfycbxxxxxxxxxxxxxxxx/exec'
-const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbz5fBiPu2iEc6wYiSmf8apd0FwnVTVSOF1QLHMRlQnv/dev';
+const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbzDZCCI1Zo8jdnVSdmJohNAIKivrI_og53ZZiCwZi7LMMpvEqEgY0fen91XlHGsGwcZFA/exec';
 const API_URL_STORAGE_KEY = 'KOPERASI_V5_API_URL';
 
 /**
