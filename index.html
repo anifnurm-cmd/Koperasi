@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Koperasi Pegawai Madrasah — Sistem Terpadu V5</title>
+
+  <!-- Font Modern: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Bootstrap 5, Bootstrap Icons & Tom Select (Searchable Dropdown) -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+
+  <!-- Tema Kustom V5 -->
+  <link href="styles.css" rel="stylesheet">
+
+  <!-- Library Terkunci via jsDelivr: Live Scanner, Excel, Barcode Generator & Searchable Dropdown -->
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+</head>
+<body>
+
+<!-- ==================== OVERLAY LOADING ANTI-KLIK GANDA ==================== -->
+<div id="busyOverlay" class="no-print" aria-live="polite">
+  <div class="busy-box">
+    <div class="spinner-border text-success mb-2" role="status"></div>
+    <div id="busyMessage" class="fw-semibold text-dark small">Menyinkronkan data koperasi...</div>
+  </div>
+</div>
+
+<!-- ==================== TOAST NOTIFIKASI IN-APP ==================== -->
+<div id="toastContainer" class="toast-container position-fixed top-0 end-0 p-3 no-print"></div>
+
+<!-- ==================== ANTARMUKA LAYAR UTAMA ==================== -->
+<div class="screen-ui">
+
+  <!-- Header Navbar -->
+  <header class="app-navbar shadow-sm no-print">
+    <div class="container-xl px-3">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div class="d-flex align-items-center gap-2 text-white">
+          <span class="brand-icon"><i class="bi bi-shop-window"></i></span>
+          <div>
+            <div class="brand-title" id="txtNamaKoperasi">Koperasi Pegawai Madrasah</div>
+            <span class="brand-subtitle">Sistem POS, Stok &amp; SHU Terpadu</span>
+          </div>
+        </div>
+
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <span id="badgeMode" class="badge bg-white text-success fw-semibold px-3 py-2 rounded-pill">
+            <i class="bi bi-cart3 me-1"></i> Mode Kasir
+          </span>
+          <button type="button" class="btn btn-outline-light btn-sm fw-semibold" onclick="muatData()" title="Sinkronkan ulang dari Google Sheet">
+            <i class="bi bi-arrow-clockwise"></i><span class="d-none d-sm-inline ms-1">Refresh</span>
+          </button>
+          <button type="button" class="btn btn-outline-light btn-sm" onclick="bukaModalApiConfig()" title="Atur URL API Google Sheet">
+            <i class="bi bi-link-45deg"></i>
+          </button>
+          <button id="btnLoginAdmin" type="button" class="btn btn-warning btn-sm fw-bold text-dark" data-bs-toggle="modal" data-bs-target="#modalPinAdmin">
+            <i class="bi bi-shield-lock-fill me-1"></i> Pengelola
+          </button>
+          <button id="btnLogoutAdmin" type="button" class="btn btn-danger btn-sm fw-bold d-none" onclick="logoutAdmin()">
+            <i class="bi bi-lock-fill me-1"></i> Kunci
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigasi Menu Utama (Scrollable Rapi di Mobile & Desktop) -->
+  <div class="nav-shell no-print">
+    <div class="container-xl px-3">
+      <ul class="nav nav-pills nav-scroll" id="mainTab" role="tablist">
+        <!-- 1. Kasir Belanja (Selalu Tampil) -->
+        <li class="nav-item">
+          <button class="nav-link active" id="btn-tab-kasir" data-bs-toggle="pill" data-bs-target="#tab-kasir" type="button">
+            <i class="bi bi-cart-check me-1"></i> Kasir Belanja
+          </button>
+        </li>
+
+        <!-- 2. Pantauan Wajib Belanja (Sesuai Setting / Mode Admin) -->
+        <li class="nav-item d-none" id="nav-wajib">
+          <button class="nav-link" id="btn-tab-wajib" data-bs-toggle="pill" data-bs-target="#tab-wajib" type="button">
+            <i class="bi bi-calendar2-check me-1"></i> Wajib Belanja
+          </button>
+        </li>
+
+        <!-- 3. Kulakan & Barcode (Admin) -->
+        <li class="nav-item admin-only">
+          <button class="nav-link" id="btn-tab-kulakan" data-bs-toggle="pill" data-bs-target="#tab-kulakan" type="button">
+            <i class="bi bi-box-seam me-1"></i> Kulakan &amp; Barcode
+          </button>
+        </li>
+
+        <!-- 4. Riwayat & Batal Transaksi (Admin) -->
+        <li class="nav-item admin-only">
+          <button class="nav-link" id="btn-tab-riwayat" data-bs-toggle="pill" data-bs-target="#tab-riwayat" type="button">
+            <i class="bi bi-clock-history me-1"></i> Riwayat &amp; Batal
+          </button>
+        </li>
+
+        <!-- 5. Tagihan Bon / Potong Gaji (Admin) -->
+        <li class="nav-item admin-only">
+          <button class="nav-link" id="btn-tab-bon" data-bs-toggle="pill" data-bs-target="#tab-bon" type="button">
+            <i class="bi bi-receipt-cutoff me-1"></i> Potong Gaji
+          </button>
+        </li>
+
+        <!-- 6. Biaya Operasional & Simpanan (Admin) -->
+        <li class="nav-item admin-only">
+          <button class="nav-link" id="btn-tab-keuangan" data-bs-toggle="pill" data-bs-target="#tab-keuangan" type="button">
+            <i class="bi bi-wallet2 me-1"></i> Biaya &amp; Simpanan
+          </button>
+        </li>
+
+        <!-- 7. Perhitungan, Slip & Export SHU (Terproteksi) -->
+        <li class="nav-item d-none" id="nav-shu">
+          <button class="nav-link" id="btn-tab-shu" data-bs-toggle="pill" data-bs-target="#tab-shu" type="button">
+            <i class="bi bi-cash-coin me-1"></i> SHU &amp; Slip Lebaran
+          </button>
+        </li>
+
+        <!-- 8. Stok, Opname & Master Anggota (Admin) -->
+        <li class="nav-item admin-only">
+          <button class="nav-link" id="btn-tab-master" data-bs-toggle="pill" data-bs-target="#tab-master" type="button">
+            <i class="bi bi-database-lock me-1"></i> Stok, Opname &amp; Anggota
+          </button>
+        </li>
+
+        <!-- 9. Panel Pengaturan Admin & Tutup Buku (Admin) -->
+        <li class="nav-item admin-only">
+          <button class="nav-link" id="btn-tab-admin" data-bs-toggle="pill" data-bs-target="#tab-admin" type="button">
+            <i class="bi bi-sliders me-1"></i> Panel Admin
+          </button>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Konten Utama -->
+  <main class="container-xl px-3 py-3 py-md-4">
+
+    <!-- Banner Koneksi API Belum Diatur -->
+    <div id="bannerApiBelumDiatur" class="alert alert-danger d-none justify-content-between align-items-center flex-wrap gap-2 rounded-3 mb-3 no-print">
+      <div>
+        <i class="bi bi-plug-fill me-2"></i>
+        <strong>Server Google Sheet belum terhubung:</strong> Masukkan URL Web App Apps Script (Container) agar data dapat dimuat.
+      </div>
+      <button type="button" class="btn btn-danger btn-sm fw-bold" onclick="bukaModalApiConfig()">Atur URL Server</button>
+    </div>
+
+    <!-- Banner Peringatan Stok Menipis (Khusus Pengelola) -->
+    <div id="bannerStokMenipis" class="alert alert-warning d-none justify-content-between align-items-center flex-wrap gap-2 rounded-3 py-2 px-3 mb-3 no-print">
+      <div class="small">
+        <i class="bi bi-exclamation-triangle-fill me-2 text-danger"></i>
+        <strong>Peringatan Stok Menipis:</strong> <span id="txtRingkasanMenipis"></span>
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-dark fw-semibold" onclick="bukaTab('btn-tab-master')">Lihat Daftar Belanja</button>
+    </div>
+
+    <!-- ==================== KONTEN SEMUA TAB ==================== -->
+    <div class="tab-content">
+
+      <!-- ================= TAB 1: KASIR BELANJA (POS) ================= -->
+      <div class="tab-pane fade show active" id="tab-kasir">
+        <div class="row g-3 align-items-start">
+
+          <!-- Kolom Kiri: Data Pembeli & Live Barcode Scanner -->
+          <div class="col-lg-5">
+            <!-- Kartu Pembeli (Searchable Dropdown Pegawai) -->
+            <div class="app-card mb-3">
+              <div class="app-card-header">
+                <h6 class="section-title"><i class="bi bi-person-badge-fill"></i> Data Pembeli (Pegawai)</h6>
+                <span class="badge badge-soft-success small">Wajib Dipilih</span>
+              </div>
+              <div class="app-card-body">
+                <div class="mb-2">
+                  <label for="posAnggota" class="form-label small fw-semibold text-muted mb-1">Cari &amp; Pilih Nama Pegawai</label>
+                  <select id="posAnggota" placeholder="Ketik nama, jabatan, atau NIP pegawai..."></select>
+                </div>
+
+                <!-- Indikator Status Wajib Belanja -->
+                <div id="infoWajibPos" class="alert py-2 px-3 small mb-2 d-none"></div>
+
+                <div>
+                  <label for="posMetode" class="form-label small fw-semibold text-muted mb-1">Metode Pembayaran</label>
+                  <select id="posMetode" class="form-select form-select-sm">
+                    <option value="Tunai / QRIS">Tunai / QRIS (Lunas Langsung)</option>
+                    <option value="Potong Gaji">Bon / Potong Gaji Bulanan</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Kartu Scan Live Barcode & Pencarian Barang -->
+            <div class="app-card">
+              <div class="app-card-header">
+                <h6 class="section-title"><i class="bi bi-upc-scan"></i> Scan &amp; Cari Barang</h6>
+                <button id="btnCamPOS" type="button" class="btn btn-emerald btn-sm" onclick="toggleCameraScanner('POS')">
+                  <i class="bi bi-camera-video-fill me-1"></i> Mulai Live Scan
+                </button>
+              </div>
+              <div class="app-card-body">
+
+                <!-- Live Camera Scanner Shell POS (Native HTTPS — Tanpa Foto) -->
+                <div id="scannerShellPOS" class="scanner-shell">
+                  <div class="scanner-toolbar">
+                    <select id="camSelectPOS" class="form-select form-select-sm" onchange="gantiKameraAktif('POS', this.value)" title="Pilih Kamera"></select>
+                    <div class="d-flex gap-1">
+                      <button id="btnTorchPOS" type="button" class="btn btn-outline-warning btn-sm d-none" onclick="toggleSenterKamera('POS')" title="Nyalakan/Matikan Senter">
+                        <i class="bi bi-lightning-charge-fill"></i>
+                      </button>
+                      <button type="button" class="btn btn-danger btn-sm" onclick="hentikanScannerKamera()" title="Tutup Kamera">
+                        <i class="bi bi-x-lg"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="scanner-viewport-wrap">
+                    <div id="readerPOS" class="scanner-viewport"></div>
+                  </div>
+                  <div class="scanner-footer-bar">
+                    <span><span class="live-dot me-1"></span><span id="statusScanPOS">Arahkan kamera ke garis barcode...</span></span>
+                    <span class="opacity-75">Jeda 1 dtk</span>
+                  </div>
+                </div>
+
+                <!-- Input Scanner USB / Manual Barcode -->
+                <label for="posBarcodeInput" class="form-label small fw-semibold text-muted mb-1">Scan USB / Ketik Kode Barcode</label>
+                <div class="input-group mb-3">
+                  <span class="input-group-text bg-light"><i class="bi bi-upc"></i></span>
+                  <input type="text" id="posBarcodeInput" class="form-control" placeholder="Scan USB atau ketik kode lalu Enter..." onkeypress="handleEnterPos(event)" autocomplete="off">
+                  <input type="number" id="posQtyInput" class="form-control text-center fw-semibold" style="max-width:74px;" value="1" min="1" title="Jumlah Volume">
+                  <button type="button" class="btn btn-emerald" onclick="tambahKeKeranjangManual()">Tambah</button>
+                </div>
+
+                <!-- Searchable Dropdown Barang Manual -->
+                <div>
+                  <label for="posPilihBarang" class="form-label small fw-semibold text-muted mb-1">Atau Cari Barang Manual (Nama / Barcode / Kategori)</label>
+                  <select id="posPilihBarang" placeholder="Ketik nama barang atau kode barcode..."></select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Kolom Kanan: Keranjang Belanja & Checkout -->
+          <div class="col-lg-7">
+            <div class="app-card">
+              <div class="app-card-header">
+                <h6 class="section-title">
+                  <i class="bi bi-basket2-fill"></i> Keranjang Belanja
+                  <span id="badgeJumlahItem" class="badge badge-soft-primary rounded-pill ms-1">0 item</span>
+                </h6>
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="kosongkanKeranjang()">
+                  <i class="bi bi-trash3 me-1"></i> Reset
+                </button>
+              </div>
+              <div class="app-card-body">
+                <div class="table-responsive mb-3">
+                  <table class="table table-modern align-middle">
+                    <thead>
+                      <tr>
+                        <th>Barang</th>
+                        <th class="text-end">Harga</th>
+                        <th class="text-center" style="width:118px;">Volume</th>
+                        <th class="text-end">Subtotal</th>
+                        <th style="width:36px;"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="tabelKeranjang">
+                      <tr>
+                        <td colspan="5" class="text-center text-muted py-5">
+                          <i class="bi bi-upc-scan fs-2 d-block mb-2 opacity-50"></i>
+                          Belum ada barang. Pindai barcode atau cari barang di sebelah kiri.
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="cart-total-panel">
+                  <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                      <div class="small text-muted fw-semibold text-uppercase">Total Belanja</div>
+                      <div class="small text-muted" id="txtRingkasanQty">0 unit barang</div>
+                    </div>
+                    <div class="fs-2 fw-extrabold text-success num" id="txtTotalKeranjang">Rp0</div>
+                  </div>
+                  <button type="button" class="btn btn-emerald w-100 py-2 fs-6 shadow-sm" onclick="prosesCheckout()">
+                    <i class="bi bi-check2-circle me-1"></i> Simpan Transaksi &amp; Potong Stok
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ================= TAB 2: CEK WAJIB BELANJA BULANAN ================= -->
+      <div class="tab-pane fade" id="tab-wajib">
+        <div class="app-card">
+          <div class="app-card-header">
+            <div>
+              <h5 class="section-title"><i class="bi bi-calendar2-check-fill"></i> Pantauan Kewajiban Belanja Bulanan</h5>
+              <small class="text-muted">Target minimal belanja: <strong id="txtTargetWajibLabel">Rp20.000</strong> / bulan (khusus pegawai aktif)</small>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2 no-print">
+              <input type="text" id="cariWajib" class="form-control form-control-sm" style="width:190px;" placeholder="Cari nama / jabatan..." oninput="renderTabelWajibBelanja()">
+              <input type="month" id="filterBulanInput" class="form-control form-control-sm" style="width:150px;" onchange="sinkronFilterBulan(this.value)">
+              <button type="button" class="btn btn-outline-emerald btn-sm" onclick="exportLaporanExcel('wajib')">
+                <i class="bi bi-file-earmark-excel me-1"></i> Export Excel
+              </button>
+            </div>
+          </div>
+          <div class="app-card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-modern align-middle" id="tabelWajibBelanja">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Nama Pegawai</th>
+                    <th>Jabatan / Unit</th>
+                    <th class="text-end">Belanja Bulan Ini</th>
+                    <th class="text-end">Kekurangan</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-center admin-only no-print">Pengingat WA</th>
+                  </tr>
+                </thead>
+                <tbody id="bodyWajibBelanja"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= TAB 3: KULAKAN & GENERATOR BARCODE (ADMIN) ================= -->
+      <div class="tab-pane fade" id="tab-kulakan">
+        <div class="row g-3">
+
+          <!-- Form Kulakan -->
+          <div class="col-lg-7">
+            <div class="app-card">
+              <div class="app-card-header">
+                <h5 class="section-title"><i class="bi bi-box-arrow-in-down"></i> Input Kulakan Barang (Stok Masuk)</h5>
+                <button id="btnCamKULAK" type="button" class="btn btn-emerald btn-sm" onclick="toggleCameraScanner('KULAK')">
+                  <i class="bi bi-camera-video-fill me-1"></i> Live Scan Barcode
+                </button>
+              </div>
+              <div class="app-card-body">
+
+                <!-- Live Camera Scanner Shell KULAKAN -->
+                <div id="scannerShellKULAK" class="scanner-shell">
+                  <div class="scanner-toolbar">
+                    <select id="camSelectKULAK" class="form-select form-select-sm" onchange="gantiKameraAktif('KULAK', this.value)" title="Pilih Kamera"></select>
+                    <div class="d-flex gap-1">
+                      <button id="btnTorchKULAK" type="button" class="btn btn-outline-warning btn-sm d-none" onclick="toggleSenterKamera('KULAK')" title="Nyalakan/Matikan Senter">
+                        <i class="bi bi-lightning-charge-fill"></i>
+                      </button>
+                      <button type="button" class="btn btn-danger btn-sm" onclick="hentikanScannerKamera()" title="Tutup Kamera">
+                        <i class="bi bi-x-lg"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="scanner-viewport-wrap">
+                    <div id="readerKULAK" class="scanner-viewport"></div>
+                  </div>
+                  <div class="scanner-footer-bar">
+                    <span><span class="live-dot me-1"></span><span id="statusScanKULAK">Arahkan kamera ke barcode barang kulakan...</span></span>
+                    <span class="opacity-75">Jeda 1 dtk</span>
+                  </div>
+                </div>
+
+                <!-- Searchable Dropdown Pilih Barang Terdaftar untuk Restok Cepat -->
+                <div class="mb-3 p-2.5 bg-light rounded-3 border px-3 py-2">
+                  <label for="kulakCariBarang" class="form-label small fw-semibold text-muted mb-1">
+                    <i class="bi bi-search me-1"></i> Restok Cepat — Cari Barang Sudah Terdaftar (Opsional)
+                  </label>
+                  <select id="kulakCariBarang" placeholder="Ketik nama barang terdaftar untuk mengisi otomatis..."></select>
+                </div>
+
+                <div class="row g-3">
+                  <div class="col-md-7">
+                    <label for="kulakBarcode" class="form-label small fw-semibold">Barcode Barang</label>
+                    <div class="input-group">
+                      <input type="text" id="kulakBarcode" class="form-control" placeholder="Scan / ketik barcode..." oninput="cekBarangKulakan()" autocomplete="off">
+                      <button class="btn btn-outline-primary" type="button" onclick="buatKodeBarcodeMandiri()" title="Buat kode otomatis untuk barang curah">
+                        <i class="bi bi-magic me-1"></i> Auto Kode
+                      </button>
+                    </div>
+                    <small id="statusDeteksiKulak" class="d-block mt-1 text-muted"></small>
+                  </div>
+
+                  <div class="col-md-5">
+                    <label for="kulakVolume" class="form-label small fw-semibold">Volume Masuk (Unit)</label>
+                    <input type="number" id="kulakVolume" class="form-control border-success fw-bold num" value="10" min="1">
+                  </div>
+
+                  <div class="col-md-7">
+                    <label for="kulakNama" class="form-label small fw-semibold">Nama Barang</label>
+                    <input type="text" id="kulakNama" class="form-control" placeholder="Contoh: Gula Curah 1/2 Kg">
+                  </div>
+
+                  <div class="col-md-5">
+                    <label for="kulakKategori" class="form-label small fw-semibold">Kategori</label>
+                    <input type="text" id="kulakKategori" class="form-control" value="Sembako">
+                  </div>
+
+                  <div class="col-md-4">
+                    <label for="kulakHargaBeli" class="form-label small fw-semibold">Harga Kulak / HPP (Rp)</label>
+                    <input type="number" id="kulakHargaBeli" class="form-control num" min="0" placeholder="0">
+                  </div>
+
+                  <div class="col-md-4">
+                    <label for="kulakHargaJual" class="form-label small fw-semibold">Harga Jual (Rp)</label>
+                    <input type="number" id="kulakHargaJual" class="form-control num" min="0" placeholder="0">
+                  </div>
+
+                  <div class="col-md-4">
+                    <label for="kulakMinStok" class="form-label small fw-semibold">Batas Min. Stok</label>
+                    <input type="number" id="kulakMinStok" class="form-control num" value="5" min="0">
+                  </div>
+
+                  <div class="col-12 pt-1">
+                    <button type="button" class="btn btn-emerald w-100 py-2" onclick="prosesSimpanKulakan()">
+                      <i class="bi bi-save me-1"></i> Simpan Kulakan &amp; Tambah Stok
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Generator & Cetak Stiker Barcode Barang Curah -->
+          <div class="col-lg-5">
+            <div class="app-card h-100 d-flex flex-column">
+              <div class="app-card-header">
+                <h5 class="section-title"><i class="bi bi-upc"></i> Cetak Barcode Mandiri</h5>
+              </div>
+              <div class="app-card-body d-flex flex-column flex-grow-1">
+                <p class="small text-muted mb-3">Untuk barang curah, telur, beras eceran, atau jajanan titipan tanpa barcode pabrikan.</p>
+
+                <div class="mb-3">
+                  <label for="selBarcodeBarang" class="form-label small fw-semibold text-muted mb-1">Cari Barang dari Master</label>
+                  <select id="selBarcodeBarang" placeholder="Ketik nama atau barcode barang..."></select>
+                </div>
+
+                <div class="row g-2 mb-3">
+                  <div class="col-7">
+                    <label for="genBarcodeKode" class="form-label small fw-semibold">Kode Barcode</label>
+                    <input type="text" id="genBarcodeKode" class="form-control form-control-sm" oninput="renderPreviewBarcode()">
+                  </div>
+                  <div class="col-5">
+                    <label for="genBarcodeJumlah" class="form-label small fw-semibold">Jumlah Stiker</label>
+                    <input type="number" id="genBarcodeJumlah" class="form-control form-control-sm num" value="12" min="1" max="60">
+                  </div>
+                  <div class="col-7">
+                    <label for="genBarcodeNama" class="form-label small fw-semibold">Label Nama</label>
+                    <input type="text" id="genBarcodeNama" class="form-control form-control-sm" oninput="renderPreviewBarcode()">
+                  </div>
+                  <div class="col-5">
+                    <label for="genBarcodeHarga" class="form-label small fw-semibold">Label Harga (Rp)</label>
+                    <input type="number" id="genBarcodeHarga" class="form-control form-control-sm num" oninput="renderPreviewBarcode()">
+                  </div>
+                </div>
+
+                <!-- Preview Stiker -->
+                <div class="border rounded-3 p-3 text-center bg-light mb-3">
+                  <div class="fw-bold small mb-1" id="prevNamaBarcode">Nama Barang</div>
+                  <div class="bg-white rounded p-2 d-inline-block border">
+                    <svg id="prevSvgBarcode"></svg>
+                  </div>
+                  <div class="fw-bold text-success small mt-1 num" id="prevHargaBarcode">Rp0</div>
+                </div>
+
+                <button type="button" class="btn btn-primary w-100 fw-semibold mt-auto" onclick="cetakStikerBarcode()">
+                  <i class="bi bi-printer me-1"></i> Cetak Lembar Stiker Barcode
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ================= TAB 4: RIWAYAT & BATAL TRANSAKSI (ADMIN) ================= -->
+      <div class="tab-pane fade" id="tab-riwayat">
+        <div class="app-card">
+          <div class="app-card-header">
+            <div>
+              <h5 class="section-title"><i class="bi bi-clock-history"></i> Riwayat Transaksi &amp; Pembatalan</h5>
+              <small class="text-muted">Membatalkan transaksi salah input otomatis mengembalikan stok barang ke Master Barang</small>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2 no-print">
+              <input type="text" id="cariRiwayat" class="form-control form-control-sm" style="width:200px;" placeholder="Cari nama / ID / barang..." oninput="renderTabelRiwayat()">
+              <input type="month" id="filterBulanRiwayat" class="form-control form-control-sm" style="width:150px;" onchange="sinkronFilterBulan(this.value)">
+              <button type="button" class="btn btn-outline-emerald btn-sm" onclick="exportLaporanExcel('riwayat')">
+                <i class="bi bi-file-earmark-excel me-1"></i> Export Excel
+              </button>
+            </div>
+          </div>
+          <div class="app-card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-modern align-middle" id="tabelRiwayatTrx">
+                <thead>
+                  <tr>
+                    <th>ID &amp; Waktu</th>
+                    <th>Nama Pegawai</th>
+                    <th>Rincian Barang</th>
+                    <th class="text-end">Total Belanja</th>
+                    <th class="text-end">Laba Kotor</th>
+                    <th class="text-center">Metode &amp; Bayar</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-center no-print">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="bodyRiwayatTrx"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= TAB 5: TAGIHAN BON / POTONG GAJI BENDAHARA (ADMIN) ================= -->
+      <div class="tab-pane fade" id="tab-bon">
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <div class="kpi-card">
+              <div>
+                <div class="kpi-label">Total Potong Gaji Bulan Ini</div>
+                <div class="kpi-value text-primary num" id="bonTotalTagihan">Rp0</div>
+              </div>
+              <span class="kpi-icon bg-primary bg-opacity-10 text-primary"><i class="bi bi-receipt"></i></span>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="kpi-card">
+              <div>
+                <div class="kpi-label">Sudah Dilunasi</div>
+                <div class="kpi-value text-success num" id="bonTotalLunas">Rp0</div>
+              </div>
+              <span class="kpi-icon bg-success bg-opacity-10 text-success"><i class="bi bi-check-circle-fill"></i></span>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="kpi-card">
+              <div>
+                <div class="kpi-label">Sisa Tagihan Bendahara</div>
+                <div class="kpi-value text-danger num" id="bonTotalBelum">Rp0</div>
+              </div>
+              <span class="kpi-icon bg-danger bg-opacity-10 text-danger"><i class="bi bi-exclamation-circle-fill"></i></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="app-card">
+          <div class="app-card-header">
+            <div>
+              <h5 class="section-title"><i class="bi bi-receipt-cutoff"></i> Rekap Tagihan Bon / Potong Gaji Bulanan</h5>
+              <small class="text-muted">Export daftar tagihan untuk diserahkan ke Bendahara Gaji, lalu tandai lunas saat pemotongan selesai</small>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2 no-print">
+              <input type="month" id="filterBulanBon" class="form-control form-control-sm" style="width:150px;" onchange="sinkronFilterBulan(this.value)">
+              <button type="button" class="btn btn-outline-emerald btn-sm" onclick="exportLaporanExcel('bon')">
+                <i class="bi bi-file-earmark-excel me-1"></i> Export Bendahara
+              </button>
+              <button type="button" class="btn btn-emerald btn-sm" onclick="prosesLunasiBonMassal()">
+                <i class="bi bi-check2-all me-1"></i> Lunasi Semua Bulan Ini
+              </button>
+            </div>
+          </div>
+          <div class="app-card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-modern align-middle" id="tabelRekapBon">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>NIP / NIY</th>
+                    <th>Nama Pegawai</th>
+                    <th>Jabatan</th>
+                    <th class="text-center">Jml Trx</th>
+                    <th class="text-end">Total Bon</th>
+                    <th class="text-end">Sudah Lunas</th>
+                    <th class="text-end">Belum Lunas</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-center no-print">Aksi &amp; WA</th>
+                  </tr>
+                </thead>
+                <tbody id="bodyRekapBon"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= TAB 6: BIAYA OPERASIONAL & SIMPANAN ANGGOTA (ADMIN) ================= -->
+      <div class="tab-pane fade" id="tab-keuangan">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h5 class="section-title fs-6"><i class="bi bi-wallet2"></i> Keuangan: Biaya Operasional &amp; Simpanan Anggota</h5>
+          <div class="d-flex align-items-center gap-2">
+            <label for="filterTahunKeuangan" class="small fw-semibold text-muted mb-0">Tahun Buku:</label>
+            <input type="number" id="filterTahunKeuangan" class="form-control form-control-sm num" style="width:96px;" onchange="sinkronFilterTahun(this.value)">
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <!-- Kiri: Pencatatan Biaya Operasional & Kas Keluar -->
+          <div class="col-lg-6">
+            <div class="app-card mb-3">
+              <div class="app-card-header">
+                <h6 class="section-title"><i class="bi bi-cash-stack text-danger"></i> Catat Biaya Operasional / Kas Keluar</h6>
+              </div>
+              <div class="app-card-body">
+                <p class="small text-muted mb-3">Otomatis mengurangi Laba Kotor menjadi <strong>Laba Bersih Riil</strong> sebelum pembagian SHU.</p>
+                <div class="row g-2">
+                  <div class="col-6">
+                    <label for="opsBulan" class="form-label small fw-semibold">Periode Bulan</label>
+                    <input type="month" id="opsBulan" class="form-control form-control-sm">
+                  </div>
+                  <div class="col-6">
+                    <label for="opsKategori" class="form-label small fw-semibold">Kategori Biaya</label>
+                    <select id="opsKategori" class="form-select form-select-sm">
+                      <option value="Plastik / Kemasan">Plastik / Kemasan</option>
+                      <option value="Listrik / Kulkas">Listrik / Kulkas</option>
+                      <option value="Transport Kulakan">Transport Kulakan</option>
+                      <option value="ATK & Cetak">ATK &amp; Cetak</option>
+                      <option value="Barang Rusak / Susut">Barang Rusak / Susut</option>
+                      <option value="Honor / Insentif Pengelola">Honor / Insentif Pengelola</option>
+                      <option value="Lain-lain">Lain-lain</option>
+                    </select>
+                  </div>
+                  <div class="col-7">
+                    <label for="opsKeterangan" class="form-label small fw-semibold">Keterangan Pengeluaran</label>
+                    <input type="text" id="opsKeterangan" class="form-control form-control-sm" placeholder="Contoh: Beli kresek & bensin kulakan">
+                  </div>
+                  <div class="col-5">
+                    <label for="opsNominal" class="form-label small fw-semibold">Nominal (Rp)</label>
+                    <input type="number" id="opsNominal" class="form-control form-control-sm num" min="100" placeholder="25000">
+                  </div>
+                  <div class="col-12 mt-2">
+                    <button type="button" class="btn btn-danger btn-sm w-100 fw-semibold" onclick="simpanOperasional()">
+                      <i class="bi bi-plus-circle me-1"></i> Simpan Pengeluaran Operasional
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="app-card">
+              <div class="app-card-header">
+                <h6 class="section-title">Riwayat Biaya Operasional</h6>
+                <span class="badge badge-soft-danger num" id="txtTotalOpsTahun">Total: Rp0</span>
+              </div>
+              <div class="app-card-body p-0">
+                <div class="table-responsive" style="max-height:330px; overflow-y:auto;">
+                  <table class="table table-modern align-middle">
+                    <thead class="sticky-top">
+                      <tr>
+                        <th>Bulan</th>
+                        <th>Kategori &amp; Keterangan</th>
+                        <th class="text-end">Nominal</th>
+                        <th style="width:36px;"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="bodyLogOperasional"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Kanan: Pencatatan Simpanan Anggota (Searchable Dropdown Pegawai) -->
+          <div class="col-lg-6">
+            <div class="app-card mb-3">
+              <div class="app-card-header">
+                <h6 class="section-title"><i class="bi bi-piggy-bank-fill text-primary"></i> Catat Simpanan Anggota</h6>
+                <div class="btn-group btn-group-sm" role="group">
+                  <button type="button" class="btn btn-primary active" id="btnModeSimpIndividu" onclick="toggleModeSimpanan('INDIVIDU')">Individu</button>
+                  <button type="button" class="btn btn-outline-primary" id="btnModeSimpMassal" onclick="toggleModeSimpanan('MASSAL')">Serentak (1-Klik)</button>
+                </div>
+              </div>
+              <div class="app-card-body">
+                <p class="small text-muted mb-2">Digunakan untuk menghitung komponen <strong>SHU Jasa Simpanan</strong> (atur porsi di Panel Admin).</p>
+
+                <!-- Form Simpanan Individu -->
+                <div id="formSimpIndividu" class="row g-2">
+                  <div class="col-12">
+                    <label for="simpAnggota" class="form-label small fw-semibold mb-1">Cari &amp; Pilih Pegawai</label>
+                    <select id="simpAnggota" placeholder="Ketik nama, jabatan, atau NIP pegawai..."></select>
+                  </div>
+                  <div class="col-6">
+                    <label for="simpBulan" class="form-label small fw-semibold">Periode Bulan</label>
+                    <input type="month" id="simpBulan" class="form-control form-control-sm">
+                  </div>
+                  <div class="col-6">
+                    <label for="simpJenis" class="form-label small fw-semibold">Jenis Simpanan</label>
+                    <select id="simpJenis" class="form-select form-select-sm">
+                      <option value="Simpanan Wajib">Simpanan Wajib</option>
+                      <option value="Simpanan Pokok">Simpanan Pokok</option>
+                      <option value="Simpanan Sukarela">Simpanan Sukarela</option>
+                    </select>
+                  </div>
+                  <div class="col-5">
+                    <label for="simpNominal" class="form-label small fw-semibold">Nominal (Rp)</label>
+                    <input type="number" id="simpNominal" class="form-control form-control-sm num" value="25000" min="1000">
+                  </div>
+                  <div class="col-7">
+                    <label for="simpKeterangan" class="form-label small fw-semibold">Catatan</label>
+                    <input type="text" id="simpKeterangan" class="form-control form-control-sm" placeholder="Opsional">
+                  </div>
+                  <div class="col-12 mt-2">
+                    <button type="button" class="btn btn-primary btn-sm w-100 fw-semibold" onclick="simpanSimpananIndividu()">
+                      <i class="bi bi-save me-1"></i> Simpan Iuran Pegawai
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Form Simpanan Serentak -->
+                <div id="formSimpMassal" class="row g-2 d-none">
+                  <div class="col-12">
+                    <div class="alert alert-info py-2 px-3 small mb-1">
+                      Mencatat iuran otomatis untuk <strong>seluruh pegawai berstatus Aktif</strong> dalam satu kali klik.
+                    </div>
+                  </div>
+                  <div class="col-4">
+                    <label for="simpMassalBulan" class="form-label small fw-semibold">Periode Bulan</label>
+                    <input type="month" id="simpMassalBulan" class="form-control form-control-sm">
+                  </div>
+                  <div class="col-4">
+                    <label for="simpMassalJenis" class="form-label small fw-semibold">Jenis</label>
+                    <select id="simpMassalJenis" class="form-select form-select-sm">
+                      <option value="Simpanan Wajib">Simpanan Wajib</option>
+                      <option value="Simpanan Pokok">Simpanan Pokok</option>
+                    </select>
+                  </div>
+                  <div class="col-4">
+                    <label for="simpMassalNominal" class="form-label small fw-semibold">Nominal / Org</label>
+                    <input type="number" id="simpMassalNominal" class="form-control form-control-sm num" value="25000" min="1000">
+                  </div>
+                  <div class="col-12">
+                    <input type="text" id="simpMassalKet" class="form-control form-control-sm" placeholder="Keterangan (misal: Potong gaji simpanan wajib bulanan)">
+                  </div>
+                  <div class="col-12 mt-2">
+                    <button type="button" class="btn btn-primary btn-sm w-100 fw-semibold" onclick="prosesSimpananMassal()">
+                      <i class="bi bi-people-fill me-1"></i> Catat Serentak Semua Pegawai Aktif
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="app-card">
+              <div class="app-card-header">
+                <h6 class="section-title">Riwayat Simpanan Anggota</h6>
+                <span class="badge badge-soft-primary num" id="txtTotalSimpTahun">Total: Rp0</span>
+              </div>
+              <div class="app-card-body p-0">
+                <div class="table-responsive" style="max-height:330px; overflow-y:auto;">
+                  <table class="table table-modern align-middle">
+                    <thead class="sticky-top">
+                      <tr>
+                        <th>Bulan</th>
+                        <th>Pegawai</th>
+                        <th>Jenis</th>
+                        <th class="text-end">Nominal</th>
+                        <th style="width:36px;"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="bodyLogSimpanan"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= TAB 7: PERHITUNGAN, SLIP LEBARAN & EXPORT SHU ================= -->
+      <div class="tab-pane fade" id="tab-shu">
+        <!-- Peringatan Otomatis jika Porsi Jasa Simpanan > 0% tapi Simpanan Kosong -->
+        <div id="alertSimpananKosong" class="alert alert-warning d-none py-2 px-3 mb-3 small rounded-3 no-print">
+          <i class="bi bi-info-circle-fill me-1"></i>
+          <strong>Perhatian Pengelola:</strong> Porsi <strong>SHU Jasa Simpanan</strong> saat ini aktif (&gt; 0%), tetapi belum ada data simpanan yang tercatat pada tahun ini. Catat simpanan di tab <em>Biaya &amp; Simpanan</em>, atau ubah porsi Jasa Belanja menjadi <strong>100%</strong> dan Jasa Simpanan <strong>0%</strong> di <em>Panel Admin</em>.
+        </div>
+
+        <!-- Baris KPI Keuangan Tahunan -->
+        <div class="row g-3 mb-3">
+          <div class="col-6 col-lg-3">
+            <div class="kpi-card">
+              <div>
+                <div class="kpi-label">Total Omzet Belanja</div>
+                <div class="kpi-value text-success num" id="shuTotalOmzet">Rp0</div>
+              </div>
+              <span class="kpi-icon bg-success bg-opacity-10 text-success"><i class="bi bi-graph-up-arrow"></i></span>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3 admin-only">
+            <div class="kpi-card">
+              <div>
+                <div class="kpi-label">Laba Kotor (Admin)</div>
+                <div class="kpi-value text-primary num" id="shuTotalLabaKotor">Rp0</div>
+              </div>
+              <span class="kpi-icon bg-primary bg-opacity-10 text-primary"><i class="bi bi-cash-coin"></i></span>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3 admin-only">
+            <div class="kpi-card">
+              <div>
+                <div class="kpi-label">Biaya Operasional</div>
+                <div class="kpi-value text-danger num" id="shuTotalBiayaOps">Rp0</div>
+              </div>
+              <span class="kpi-icon bg-danger bg-opacity-10 text-danger"><i class="bi bi-wallet2"></i></span>
+            </div>
+          </div>
+          <div class="col-6 col-lg-3 admin-only">
+            <div class="kpi-card">
+              <div>
+                <div class="kpi-label">Laba Bersih Riil</div>
+                <div class="kpi-value text-dark num" id="shuLabaBersih">Rp0</div>
+              </div>
+              <span class="kpi-icon bg-dark bg-opacity-10 text-dark"><i class="bi bi-bank2"></i></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Baris Breakdown 2 Komponen SHU -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <div class="kpi-card kpi-highlight">
+              <div>
+                <div class="kpi-label">Dana SHU Anggota (<span id="shuPersenAlokasi">60</span>% Laba Bersih)</div>
+                <div class="kpi-value num" id="shuDanaDibagi">Rp0</div>
+              </div>
+              <span class="kpi-icon bg-white bg-opacity-25 text-white"><i class="bi bi-gift-fill"></i></span>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="kpi-card">
+              <div>
+                <div class="kpi-label">Porsi Jasa Belanja (<span id="shuPersenBelanjaLabel">70</span>%)</div>
+                <div class="kpi-value text-warning-emphasis num" id="shuDanaBelanja">Rp0</div>
+              </div>
+              <span class="kpi-icon bg-warning bg-opacity-25 text-warning-emphasis"><i class="bi bi-bag-check-fill"></i></span>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="kpi-card">
+              <div>
+                <div class="kpi-label">Porsi Jasa Simpanan (<span id="shuPersenSimpananLabel">30</span>%)</div>
+                <div class="kpi-value text-info-emphasis num" id="shuDanaSimpanan">Rp0</div>
+                <small class="text-muted">Total Simpanan: <span class="num fw-semibold" id="shuTotalSimpanan">Rp0</span></small>
+              </div>
+              <span class="kpi-icon bg-info bg-opacity-25 text-info-emphasis"><i class="bi bi-piggy-bank-fill"></i></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabel Pembagian SHU -->
+        <div class="app-card">
+          <div class="app-card-header">
+            <div>
+              <h5 class="section-title"><i class="bi bi-award-fill"></i> Pembagian SHU Pegawai (Akhir Tahun / Hari Raya Lebaran)</h5>
+              <small class="text-muted">Proporsional Jasa Belanja &amp; Simpanan. Pegawai pensiun/mutasi tetap menerima haknya.</small>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2 no-print">
+              <input type="text" id="cariSHU" class="form-control form-control-sm" style="width:170px;" placeholder="Cari pegawai..." oninput="renderTabSHU()">
+              <input type="number" id="filterTahunInput" class="form-control form-control-sm num" style="width:90px;" onchange="sinkronFilterTahun(this.value)">
+              <button type="button" class="btn btn-primary btn-sm fw-semibold" onclick="cetakSemuaSlipSHU()">
+                <i class="bi bi-envelope-paper me-1"></i> Slip A6
+              </button>
+              <button type="button" class="btn btn-emerald btn-sm" onclick="exportLaporanExcel('shu')">
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i> Excel
+              </button>
+              <button type="button" class="btn btn-outline-dark btn-sm" onclick="window.print()">
+                <i class="bi bi-printer me-1"></i> Cetak
+              </button>
+            </div>
+          </div>
+          <div class="app-card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-modern align-middle" id="tabelRekapSHU">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>NIP / NIY</th>
+                    <th>Nama Pegawai</th>
+                    <th class="text-center">Frek.</th>
+                    <th class="text-end">Total Belanja</th>
+                    <th class="text-end">Total Simpanan</th>
+                    <th class="text-end">SHU Belanja</th>
+                    <th class="text-end">SHU Simpanan</th>
+                    <th class="text-end">Total SHU</th>
+                    <th class="text-center no-print">Slip</th>
+                  </tr>
+                </thead>
+                <tbody id="bodyRekapSHU"></tbody>
+                <tfoot id="footRekapSHU" class="table-light fw-bold"></tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= TAB 8: STOK, OPNAME & MASTER ANGGOTA (ADMIN) ================= -->
+      <div class="tab-pane fade" id="tab-master">
+        <!-- Daftar Belanja Kulakan Otomatis (Stok Menipis) -->
+        <div id="cardStokMenipis" class="app-card mb-3 border-warning d-none">
+          <div class="app-card-header bg-warning bg-opacity-10">
+            <h6 class="section-title text-danger"><i class="bi bi-exclamation-octagon-fill text-danger"></i> Daftar Belanja Kulakan Otomatis (Stok Menipis / Habis)</h6>
+            <button type="button" class="btn btn-outline-danger btn-sm fw-semibold" onclick="exportLaporanExcel('stok_menipis')">
+              <i class="bi bi-file-earmark-excel me-1"></i> Export Daftar Belanja
+            </button>
+          </div>
+          <div class="app-card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-modern align-middle" id="tabelStokMenipis">
+                <thead>
+                  <tr>
+                    <th>Barcode</th>
+                    <th>Nama Barang</th>
+                    <th>Kategori</th>
+                    <th class="text-center">Sisa Stok</th>
+                    <th class="text-center">Min. Stok</th>
+                    <th class="text-end">Harga Kulak Terakhir</th>
+                  </tr>
+                </thead>
+                <tbody id="bodyStokMenipis"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <!-- Kiri: Master Barang & Log Opname -->
+          <div class="col-lg-7">
+            <div class="app-card mb-3">
+              <div class="app-card-header">
+                <h6 class="section-title"><i class="bi bi-box-seam-fill"></i> Daftar Master Barang, HPP &amp; Stok</h6>
+                <input type="text" id="cariBarangMaster" class="form-control form-control-sm" style="width:210px;" placeholder="Cari barang / barcode..." oninput="renderMasterBarang()">
+              </div>
+              <div class="app-card-body p-0">
+                <div class="table-responsive" style="max-height:420px; overflow-y:auto;">
+                  <table class="table table-modern align-middle">
+                    <thead class="sticky-top">
+                      <tr>
+                        <th>Barcode &amp; Nama</th>
+                        <th class="text-end">Kulak</th>
+                        <th class="text-end">Jual</th>
+                        <th class="text-end">Laba</th>
+                        <th class="text-center">Stok</th>
+                        <th class="text-center">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody id="bodyMasterBarang"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="app-card">
+              <div class="app-card-header">
+                <h6 class="section-title"><i class="bi bi-clipboard-data"></i> Log Audit Stok Opname Terbaru</h6>
+              </div>
+              <div class="app-card-body p-0">
+                <div class="table-responsive" style="max-height:240px; overflow-y:auto;">
+                  <table class="table table-modern align-middle">
+                    <thead class="sticky-top">
+                      <tr>
+                        <th>Waktu</th>
+                        <th>Barang</th>
+                        <th class="text-center">Sistem → Fisik</th>
+                        <th class="text-center">Selisih</th>
+                        <th>Alasan</th>
+                      </tr>
+                    </thead>
+                    <tbody id="bodyLogOpname"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Kanan: Tambah & Daftar Pegawai / Anggota -->
+          <div class="col-lg-5">
+            <div class="app-card mb-3">
+              <div class="app-card-header">
+                <h6 class="section-title"><i class="bi bi-person-plus-fill"></i> Tambah Pegawai / Anggota Baru</h6>
+              </div>
+              <div class="app-card-body">
+                <div class="row g-2">
+                  <div class="col-md-6">
+                    <input type="text" id="angNama" class="form-control form-control-sm" placeholder="Nama Lengkap & Gelar">
+                  </div>
+                  <div class="col-md-6">
+                    <input type="text" id="angNip" class="form-control form-control-sm" placeholder="NIP / NIY">
+                  </div>
+                  <div class="col-md-6">
+                    <input type="text" id="angJabatan" class="form-control form-control-sm" placeholder="Jabatan (Guru / TU)">
+                  </div>
+                  <div class="col-md-6">
+                    <input type="text" id="angHp" class="form-control form-control-sm" placeholder="No. WA (08xxxx)">
+                  </div>
+                  <div class="col-12 mt-2">
+                    <button type="button" class="btn btn-emerald btn-sm w-100" onclick="simpanAnggota()">+ Tambah Anggota</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="app-card">
+              <div class="app-card-header">
+                <h6 class="section-title"><i class="bi bi-people-fill"></i> Daftar Pegawai Terdaftar</h6>
+                <input type="text" id="cariAnggotaMaster" class="form-control form-control-sm" style="width:170px;" placeholder="Cari pegawai..." oninput="renderMasterAnggota()">
+              </div>
+              <div class="app-card-body p-0">
+                <div class="table-responsive" style="max-height:460px; overflow-y:auto;">
+                  <table class="table table-modern align-middle">
+                    <thead class="sticky-top">
+                      <tr>
+                        <th>Pegawai</th>
+                        <th>Status</th>
+                        <th class="text-center">Edit</th>
+                      </tr>
+                    </thead>
+                    <tbody id="bodyMasterAnggota"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= TAB 9: PANEL PENGATURAN ADMIN & TUTUP BUKU ================= -->
+      <div class="tab-pane fade" id="tab-admin">
+        <div class="row g-3">
+          <!-- Kiri: Pengaturan Visibilitas, Parameter SHU & Template WA -->
+          <div class="col-lg-8">
+            <div class="app-card">
+              <div class="app-card-header">
+                <div>
+                  <h5 class="section-title"><i class="bi bi-sliders"></i> Panel Pengaturan Pengelola Koperasi</h5>
+                  <small class="text-muted">Kontrol privasi layar publik, rumus SHU 2 komponen, PIN Admin, &amp; template WhatsApp</small>
+                </div>
+              </div>
+              <div class="app-card-body">
+                <div class="row g-3">
+                  <!-- Visibilitas Layar Publik -->
+                  <div class="col-12">
+                    <div class="p-3 bg-light rounded-3 border">
+                      <h6 class="fw-bold text-dark small text-uppercase mb-2"><i class="bi bi-eye-slash-fill text-danger me-1"></i> Privasi &amp; Visibilitas Layar Umum (Tanpa Login)</h6>
+                      <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" id="setTampilSHU">
+                        <label class="form-check-label fw-semibold small" for="setTampilSHU">Tampilkan Tab "SHU &amp; Slip Lebaran" ke Publik</label>
+                        <div class="form-text mt-0">Matikan untuk harian. Nyalakan menjelang pembagian SHU (Laba &amp; Biaya tetap tersembunyi).</div>
+                      </div>
+                      <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" id="setTampilWajib">
+                        <label class="form-check-label fw-semibold small" for="setTampilWajib">Tampilkan Tab "Wajib Belanja" di Layar Kasir</label>
+                      </div>
+                      <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="setTampilNotifKasir">
+                        <label class="form-check-label fw-semibold small" for="setTampilNotifKasir">Tampilkan Info Status Wajib Belanja Saat Pilih Nama di Kasir</label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Parameter Dasar & Rumus SHU 2 Komponen -->
+                  <div class="col-md-6">
+                    <label for="setNamaKoperasi" class="form-label small fw-semibold">Nama Koperasi / Instansi</label>
+                    <input type="text" id="setNamaKoperasi" class="form-control form-control-sm">
+                  </div>
+                  <div class="col-md-6">
+                    <label for="setWajibBulanan" class="form-label small fw-semibold">Target Wajib Belanja Bulanan (Rp)</label>
+                    <input type="number" id="setWajibBulanan" class="form-control form-control-sm num" step="1000" min="0">
+                  </div>
+                  <div class="col-md-4">
+                    <label for="setPersenSHU" class="form-label small fw-semibold">Alokasi SHU Laba Bersih (%)</label>
+                    <input type="number" id="setPersenSHU" class="form-control form-control-sm num" min="0" max="100">
+                  </div>
+                  <div class="col-md-4">
+                    <label for="setPersenJasaBelanja" class="form-label small fw-semibold">Porsi Jasa Belanja (%)</label>
+                    <input type="number" id="setPersenJasaBelanja" class="form-control form-control-sm num" min="0" max="100" oninput="sinkronPorsiSHU('BELANJA')">
+                  </div>
+                  <div class="col-md-4">
+                    <label for="setPersenJasaSimpanan" class="form-label small fw-semibold">Porsi Jasa Simpanan (%)</label>
+                    <input type="number" id="setPersenJasaSimpanan" class="form-control form-control-sm num" min="0" max="100" oninput="sinkronPorsiSHU('SIMPANAN')">
+                  </div>
+                  <div class="col-12">
+                    <small class="text-muted">Tips: Isi Jasa Belanja <strong>100%</strong> dan Jasa Simpanan <strong>0%</strong> jika koperasi tidak memakai sistem simpanan.</small>
+                  </div>
+
+                  <!-- Template Pesan WhatsApp -->
+                  <div class="col-12">
+                    <label for="setPesanWaWajib" class="form-label small fw-semibold">Template WA Wajib Belanja (Variabel: <code>{NAMA}</code>, <code>{BULAN}</code>, <code>{KURANG}</code>)</label>
+                    <textarea id="setPesanWaWajib" class="form-control form-control-sm" rows="2"></textarea>
+                  </div>
+                  <div class="col-12">
+                    <label for="setPesanWaBon" class="form-label small fw-semibold">Template WA Potong Gaji (Variabel: <code>{NAMA}</code>, <code>{BULAN}</code>, <code>{TAGIHAN}</code>)</label>
+                    <textarea id="setPesanWaBon" class="form-control form-control-sm" rows="2"></textarea>
+                  </div>
+
+                  <!-- Ganti PIN -->
+                  <div class="col-md-6">
+                    <label for="setPinBaru" class="form-label small fw-semibold">Ganti PIN Pengelola Baru (Min. 4 karakter)</label>
+                    <input type="password" id="setPinBaru" class="form-control form-control-sm" placeholder="Kosongkan jika tetap pakai PIN lama">
+                  </div>
+
+                  <div class="col-12 pt-2">
+                    <button type="button" class="btn btn-emerald w-100 py-2" onclick="simpanPengaturan()">
+                      <i class="bi bi-check2-all me-1"></i> Simpan Seluruh Pengaturan Admin
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Kanan: Arsip Tutup Buku Tahunan (RAT) -->
+          <div class="col-lg-4">
+            <div class="app-card h-100 border-primary">
+              <div class="app-card-header">
+                <h5 class="section-title text-primary"><i class="bi bi-archive-fill text-primary"></i> Arsip Tutup Buku Tahunan</h5>
+              </div>
+              <div class="app-card-body d-flex flex-column">
+                <p class="small text-muted">
+                  Menyalin rekap final keuangan, Laba Bersih, dan perolehan SHU setiap pegawai ke dalam <strong>sheet arsip permanen</strong> (contoh: <code>Arsip_SHU_2026</code>) di file Google Sheet sebagai dokumen resmi Rapat Anggota Tahunan (RAT).
+                </p>
+                <div class="mb-3">
+                  <label for="arsipTahunInput" class="form-label small fw-semibold">Pilih Tahun Buku</label>
+                  <input type="number" id="arsipTahunInput" class="form-control fw-bold text-center num">
+                </div>
+                <button type="button" class="btn btn-primary w-100 py-2 fw-semibold" onclick="prosesArsipTutupBuku()">
+                  <i class="bi bi-folder-check me-1"></i> Buat Sheet Arsip Tutup Buku
+                </button>
+                <div class="alert alert-light border small text-muted mt-3 mb-0">
+                  <i class="bi bi-info-circle me-1"></i> Aman dijalankan berulang kali: jika sheet tahun yang sama sudah ada, sistem memperbarui isinya tanpa menghapus log transaksi.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /tab-content -->
+  </main>
+</div><!-- /screen-ui -->
+
+<!-- ==================== AREA KHUSUS CETAK (PRINT ONLY) ==================== -->
+<div id="areaCetakSlipSHU"></div>
+<div id="areaCetakBarcode"></div>
+
+<!-- ==================== MODAL DIALOG IN-APP ==================== -->
+
+<!-- 0A. Modal Konfigurasi URL API Container Google Sheet -->
+<div class="modal fade" id="modalApiConfig" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-dark text-white py-2">
+        <h6 class="modal-title fw-bold"><i class="bi bi-link-45deg me-1"></i> Koneksi Server Google Sheet (Apps Script)</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Tutup"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-2">
+          Tempelkan URL Web App dari deployment <code>Code.gs</code> pada file Google Sheet koperasi Anda (berakhiran <code>/exec</code>).
+        </p>
+        <label for="inputApiUrl" class="form-label small fw-semibold">URL Web App Apps Script</label>
+        <input type="url" id="inputApiUrl" class="form-control form-control-sm mb-2" placeholder="https://script.google.com/macros/s/.../exec">
+        <div id="txtStatusApiModal" class="small text-muted"></div>
+      </div>
+      <div class="modal-footer py-2 d-flex justify-content-between">
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetApiConfigDefault()">Reset Default</button>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Tutup</button>
+          <button type="button" class="btn btn-emerald btn-sm" onclick="simpanApiConfig()">Simpan &amp; Hubungkan</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 0B. Modal Konfirmasi Kustom (Pengganti confirm() tanpa pop-up browser) -->
+<div class="modal fade" id="modalKonfirmasi" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div id="konfHeader" class="modal-header bg-success text-white py-2">
+        <h6 class="modal-title fw-bold" id="konfJudul">Konfirmasi Tindakan</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Tutup"></button>
+      </div>
+      <div class="modal-body">
+        <p id="konfPesan" class="mb-0 small" style="white-space: pre-line;"></p>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnKonfBatal" data-bs-dismiss="modal">Batal</button>
+        <button type="button" class="btn btn-emerald btn-sm" id="btnKonfYa">Ya, Lanjutkan</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 1. Modal Login PIN Pengelola -->
+<div class="modal fade" id="modalPinAdmin" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-success text-white py-2">
+        <h6 class="modal-title fw-bold"><i class="bi bi-shield-lock me-1"></i> Login Pengelola</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label for="inputPinLogin" class="form-label small fw-semibold">Masukkan PIN Pengelola</label>
+        <input type="password" id="inputPinLogin" class="form-control text-center fs-5 fw-bold" placeholder="••••••" onkeypress="if(event.key==='Enter') prosesLoginAdmin()">
+        <small class="text-muted d-block mt-2">Membuka Kulakan, Batal Transaksi, Potong Gaji, Biaya, SHU, dan Pengaturan.</small>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-emerald w-100" onclick="prosesLoginAdmin()">Buka Menu Pengelola</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 2. Modal Edit Master Barang -->
+<div class="modal fade" id="modalEditBarang" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-primary text-white py-2">
+        <h6 class="modal-title fw-bold"><i class="bi bi-pencil-square me-1"></i> Edit Data Barang</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2">
+          <div class="col-12">
+            <label for="editBrgBarcode" class="form-label small fw-semibold">Barcode (Tetap)</label>
+            <input type="text" id="editBrgBarcode" class="form-control form-control-sm bg-light" readonly>
+          </div>
+          <div class="col-8">
+            <label for="editBrgNama" class="form-label small fw-semibold">Nama Barang</label>
+            <input type="text" id="editBrgNama" class="form-control form-control-sm">
+          </div>
+          <div class="col-4">
+            <label for="editBrgKategori" class="form-label small fw-semibold">Kategori</label>
+            <input type="text" id="editBrgKategori" class="form-control form-control-sm">
+          </div>
+          <div class="col-4">
+            <label for="editBrgKulak" class="form-label small fw-semibold">Harga Kulak (Rp)</label>
+            <input type="number" id="editBrgKulak" class="form-control form-control-sm num" min="0">
+          </div>
+          <div class="col-4">
+            <label for="editBrgJual" class="form-label small fw-semibold">Harga Jual (Rp)</label>
+            <input type="number" id="editBrgJual" class="form-control form-control-sm num" min="0">
+          </div>
+          <div class="col-4">
+            <label for="editBrgMinStok" class="form-label small fw-semibold">Min. Stok</label>
+            <input type="number" id="editBrgMinStok" class="form-control form-control-sm num" min="0">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+        <button type="button" class="btn btn-primary btn-sm fw-semibold" onclick="simpanEditBarang()">Simpan Perubahan</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 3. Modal Stok Opname / Penyesuaian Fisik -->
+<div class="modal fade" id="modalOpname" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-warning text-dark py-2">
+        <h6 class="modal-title fw-bold"><i class="bi bi-clipboard-check me-1"></i> Stok Opname / Penyesuaian</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="opnBarcode">
+        <div class="mb-2">
+          <div class="fw-bold" id="opnNamaBarang">Nama Barang</div>
+          <small class="text-muted">Stok tercatat di sistem: <strong id="opnStokSistem">0</strong> unit</small>
+        </div>
+        <div class="mb-2">
+          <label for="opnStokFisik" class="form-label small fw-semibold">Jumlah Stok Fisik Riil di Rak</label>
+          <input type="number" id="opnStokFisik" class="form-control fw-bold border-warning num" min="0">
+        </div>
+        <div>
+          <label for="opnAlasanSelect" class="form-label small fw-semibold">Alasan Penyesuaian</label>
+          <select id="opnAlasanSelect" class="form-select form-select-sm mb-2" onchange="document.getElementById('opnAlasanText').value=this.value">
+            <option value="Selisih hitung fisik (Opname)">Selisih hitung fisik (Opname)</option>
+            <option value="Barang rusak / bocor / pecah">Barang rusak / bocor / pecah</option>
+            <option value="Barang kedaluwarsa (Expired)">Barang kedaluwarsa (Expired)</option>
+            <option value="Retur / koreksi input">Retur / koreksi input</option>
+          </select>
+          <input type="text" id="opnAlasanText" class="form-control form-control-sm" value="Selisih hitung fisik (Opname)" placeholder="Catatan detail...">
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+        <button type="button" class="btn btn-warning btn-sm fw-bold" onclick="prosesSimpanOpname()">Simpan Opname</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 4. Modal Edit Pegawai / Status Aktif-Nonaktif -->
+<div class="modal fade" id="modalEditAnggota" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-success text-white py-2">
+        <h6 class="modal-title fw-bold"><i class="bi bi-person-gear me-1"></i> Edit Data &amp; Status Pegawai</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2">
+          <div class="col-4">
+            <label for="editAngId" class="form-label small fw-semibold">ID Anggota</label>
+            <input type="text" id="editAngId" class="form-control form-control-sm bg-light" readonly>
+          </div>
+          <div class="col-8">
+            <label for="editAngStatus" class="form-label small fw-semibold">Status Keanggotaan</label>
+            <select id="editAngStatus" class="form-select form-select-sm fw-bold">
+              <option value="Aktif">Aktif (Masuk Tagihan Wajib Belanja)</option>
+              <option value="Nonaktif">Nonaktif / Mutasi / Pensiun (Hak SHU Tetap Dihitung)</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label for="editAngNama" class="form-label small fw-semibold">Nama Lengkap &amp; Gelar</label>
+            <input type="text" id="editAngNama" class="form-control form-control-sm">
+          </div>
+          <div class="col-6">
+            <label for="editAngNip" class="form-label small fw-semibold">NIP / NIY</label>
+            <input type="text" id="editAngNip" class="form-control form-control-sm">
+          </div>
+          <div class="col-6">
+            <label for="editAngJabatan" class="form-label small fw-semibold">Jabatan / Unit</label>
+            <input type="text" id="editAngJabatan" class="form-control form-control-sm">
+          </div>
+          <div class="col-12">
+            <label for="editAngHp" class="form-label small fw-semibold">No. WhatsApp (Format 08xxx / 628xxx)</label>
+            <input type="text" id="editAngHp" class="form-control form-control-sm" placeholder="081234567890">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+        <button type="button" class="btn btn-emerald btn-sm" onclick="simpanEditAnggota()">Simpan Perubahan</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bootstrap JS & Aplikasi Utama V5 -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
