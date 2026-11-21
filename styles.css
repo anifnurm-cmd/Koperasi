@@ -1,0 +1,649 @@
+/* ============================================================================
+ * SISTEM MANAJEMEN KOPERASI PEGAWAI MADRASAH — V5 FINAL (GITHUB PAGES)
+ * Tema: Modern Emerald & Slate | Responsif Desktop & Mobile
+ * ============================================================================ */
+
+:root {
+  --kop-primary: #0f766e;
+  --kop-primary-dark: #065f46;
+  --kop-primary-hover: #0d635c;
+  --kop-primary-soft: #ecfdf5;
+  --kop-primary-border: #a7f3d0;
+  --kop-accent: #f59e0b;
+  --kop-bg: #f1f5f9;
+  --kop-surface: #ffffff;
+  --kop-surface-alt: #f8fafc;
+  --kop-border: #e2e8f0;
+  --kop-text: #0f172a;
+  --kop-muted: #64748b;
+  --kop-radius: 14px;
+  --kop-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--kop-bg);
+  color: var(--kop-text);
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* Angka keuangan sejajar sempurna */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Proteksi Elemen Pengelola: Kompatibel 100% dengan d-flex, grid, dan tabel */
+body:not(.is-admin) .admin-only {
+  display: none !important;
+}
+
+/* ==================== NAVBAR & NAVIGASI TAB ==================== */
+.app-navbar {
+  background: linear-gradient(135deg, #064e3b 0%, #0f766e 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.7rem 0;
+}
+
+.brand-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.16);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.brand-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.brand-subtitle {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.78);
+  display: block;
+}
+
+.nav-shell {
+  background: var(--kop-surface);
+  border-bottom: 1px solid var(--kop-border);
+  position: sticky;
+  top: 0;
+  z-index: 1020;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+}
+
+.nav-scroll {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  gap: 6px;
+  padding: 0.6rem 0;
+}
+
+.nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.nav-scroll .nav-item {
+  flex: 0 0 auto;
+}
+
+.nav-pills .nav-link {
+  color: var(--kop-muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  border-radius: 10px;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid transparent;
+  transition: all 0.16s ease;
+  white-space: nowrap;
+}
+
+.nav-pills .nav-link:hover {
+  color: var(--kop-primary-dark);
+  background-color: var(--kop-primary-soft);
+}
+
+.nav-pills .nav-link.active {
+  background-color: var(--kop-primary);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 118, 110, 0.28);
+}
+
+/* ==================== KARTU, PANEL & KPI ==================== */
+.app-card {
+  background: var(--kop-surface);
+  border: 1px solid var(--kop-border);
+  border-radius: var(--kop-radius);
+  box-shadow: var(--kop-shadow);
+}
+
+.app-card-header {
+  padding: 0.95rem 1.2rem;
+  border-bottom: 1px solid var(--kop-border);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.app-card-body {
+  padding: 1.2rem;
+}
+
+.section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--kop-text);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.section-title i {
+  color: var(--kop-primary);
+}
+
+.kpi-card {
+  background: var(--kop-surface);
+  border: 1px solid var(--kop-border);
+  border-radius: var(--kop-radius);
+  padding: 1rem 1.15rem;
+  box-shadow: var(--kop-shadow);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.kpi-card.kpi-highlight {
+  background: linear-gradient(135deg, #065f46 0%, #0f766e 100%);
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.kpi-label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--kop-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.kpi-card.kpi-highlight .kpi-label {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.kpi-value {
+  font-size: 1.3rem;
+  font-weight: 800;
+  margin-top: 0.2rem;
+  line-height: 1.2;
+}
+
+.kpi-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+/* ==================== TOMBOL & BADGE HALUS ==================== */
+.btn-emerald {
+  background-color: var(--kop-primary);
+  border-color: var(--kop-primary);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.btn-emerald:hover,
+.btn-emerald:focus {
+  background-color: var(--kop-primary-hover);
+  border-color: var(--kop-primary-hover);
+  color: #ffffff;
+}
+
+.btn-outline-emerald {
+  color: var(--kop-primary);
+  border-color: var(--kop-primary);
+  font-weight: 600;
+  background: transparent;
+}
+
+.btn-outline-emerald:hover {
+  background-color: var(--kop-primary);
+  color: #ffffff;
+}
+
+.badge-soft-success {
+  background-color: #dcfce7;
+  color: #166534;
+  font-weight: 600;
+}
+
+.badge-soft-warning {
+  background-color: #fef3c7;
+  color: #92400e;
+  font-weight: 600;
+}
+
+.badge-soft-danger {
+  background-color: #fee2e2;
+  color: #991b1b;
+  font-weight: 600;
+}
+
+.badge-soft-secondary {
+  background-color: #e2e8f0;
+  color: #334155;
+  font-weight: 600;
+}
+
+.badge-soft-primary {
+  background-color: #dbeafe;
+  color: #1e40af;
+  font-weight: 600;
+}
+
+/* ==================== LIVE BARCODE SCANNER (NATIVE HTTPS) ==================== */
+.scanner-shell {
+  display: none;
+  background: #0f172a;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid var(--kop-primary);
+  margin-bottom: 0.85rem;
+}
+
+.scanner-shell.active {
+  display: block;
+}
+
+.scanner-toolbar {
+  background: #1e293b;
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.scanner-toolbar select {
+  background-color: #0f172a;
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 0.78rem;
+  max-width: 210px;
+}
+
+.scanner-viewport-wrap {
+  position: relative;
+  width: 100%;
+  background: #000000;
+}
+
+.scanner-viewport {
+  width: 100%;
+  min-height: 220px;
+}
+
+.scanner-viewport video {
+  width: 100% !important;
+  height: auto !important;
+  display: block;
+  object-fit: cover;
+}
+
+.scanner-footer-bar {
+  background: #0f172a;
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  padding: 0.45rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  display: inline-block;
+  animation: kopPulse 1.4s infinite;
+}
+
+@keyframes kopPulse {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.25); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* ==================== SEARCHABLE DROPDOWN (TOM SELECT) ==================== */
+.ts-wrapper.single .ts-control {
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0.52rem 0.85rem;
+  min-height: 42px;
+  font-size: 0.9rem;
+  box-shadow: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ts-wrapper.single.focus .ts-control {
+  border-color: var(--kop-primary);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.16);
+}
+
+.ts-wrapper.ts-sm.single .ts-control {
+  padding: 0.36rem 0.72rem;
+  min-height: 35px;
+  font-size: 0.84rem;
+  border-radius: 8px;
+}
+
+.ts-dropdown {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+  overflow: hidden;
+  z-index: 1060;
+  margin-top: 4px;
+}
+
+.ts-dropdown .ts-dropdown-content {
+  max-height: 260px;
+}
+
+.ts-dropdown .option {
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+}
+
+.ts-dropdown .option:last-child {
+  border-bottom: none;
+}
+
+.ts-dropdown .option.active {
+  background-color: var(--kop-primary-soft);
+  color: var(--kop-primary-dark);
+}
+
+.ts-opt-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ts-opt-title {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--kop-text);
+  line-height: 1.25;
+}
+
+.ts-opt-sub {
+  font-size: 0.75rem;
+  color: var(--kop-muted);
+}
+
+.ts-opt-price {
+  font-weight: 700;
+  font-size: 0.84rem;
+  color: var(--kop-primary-dark);
+  white-space: nowrap;
+}
+
+/* ==================== TABEL & KERANJANG POS ==================== */
+.table-modern {
+  margin-bottom: 0;
+}
+
+.table-modern thead th {
+  background-color: var(--kop-surface-alt);
+  color: var(--kop-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--kop-border);
+  padding: 0.7rem 0.75rem;
+  white-space: nowrap;
+}
+
+.table-modern tbody td {
+  padding: 0.65rem 0.75rem;
+  vertical-align: middle;
+  border-color: #f1f5f9;
+  font-size: 0.88rem;
+}
+
+.table-modern tbody tr:hover {
+  background-color: #f8fafc;
+}
+
+.cart-total-panel {
+  background: linear-gradient(180deg, #f8fafc 0%, #ecfdf5 100%);
+  border: 1px solid var(--kop-primary-border);
+  border-radius: 12px;
+  padding: 1rem 1.15rem;
+}
+
+.qty-stepper {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.qty-stepper button {
+  border: none;
+  background: #f8fafc;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--kop-text);
+}
+
+.qty-stepper button:hover {
+  background: #e2e8f0;
+}
+
+.qty-stepper span {
+  min-width: 30px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.86rem;
+}
+
+/* ==================== OVERLAY LOADING & TOAST ==================== */
+#busyOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.32);
+  backdrop-filter: blur(2px);
+  z-index: 2000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+#busyOverlay.show {
+  display: flex;
+}
+
+.busy-box {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 1.25rem 1.75rem;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.22);
+  text-align: center;
+  min-width: 230px;
+}
+
+#toastContainer {
+  z-index: 2100;
+}
+
+.koperasi-toast {
+  min-width: 295px;
+  max-width: 400px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+/* ==================== AREA CETAK SLIP SHU & STIKER BARCODE ==================== */
+#areaCetakSlipSHU,
+#areaCetakBarcode {
+  display: none;
+}
+
+.slip-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding: 8px;
+}
+
+.slip-card {
+  border: 1.5px dashed #334155;
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: #ffffff;
+  color: #000000;
+  font-size: 11.5px;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.slip-header {
+  text-align: center;
+  border-bottom: 1.5px solid #000000;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+.slip-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 6px;
+}
+
+.slip-table td {
+  padding: 2px 0;
+}
+
+.slip-total-box {
+  border: 1.5px solid #000000;
+  background: #ecfdf5;
+  padding: 6px 8px;
+  margin-top: 6px;
+  display: flex;
+  justify-content: space-between;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.barcode-print-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 8px;
+}
+
+.barcode-sticker {
+  border: 1px dashed #64748b;
+  border-radius: 4px;
+  padding: 8px 6px;
+  text-align: center;
+  background: #ffffff;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.barcode-sticker svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ==================== MODE CETAK (@media print) ==================== */
+@media print {
+  body {
+    background: #ffffff !important;
+  }
+
+  .no-print,
+  #toastContainer,
+  #busyOverlay,
+  .nav-shell {
+    display: none !important;
+  }
+
+  .app-card,
+  .kpi-card {
+    box-shadow: none !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  body.mode-print-slip .screen-ui {
+    display: none !important;
+  }
+  body.mode-print-slip #areaCetakSlipSHU {
+    display: block !important;
+  }
+
+  body.mode-print-barcode .screen-ui {
+    display: none !important;
+  }
+  body.mode-print-barcode #areaCetakBarcode {
+    display: block !important;
+  }
+}
+
+/* ==================== RESPONSIF MOBILE ==================== */
+@media (max-width: 576px) {
+  .brand-title {
+    font-size: 0.94rem;
+  }
+  .kpi-value {
+    font-size: 1.12rem;
+  }
+  .app-card-header,
+  .app-card-body {
+    padding: 0.9rem;
+  }
+}
