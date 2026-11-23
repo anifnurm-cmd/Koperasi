@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Koperasi Pegawai Madrasah — Sistem Terpadu V5</title>
+  <title>Koperasi Pegawai Madrasah — Sistem Terpadu V5.1</title>
 
   <!-- Font Modern: Plus Jakarta Sans -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,10 +15,10 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
 
-  <!-- Tema Kustom V5 -->
+  <!-- Tema Kustom V5.1 -->
   <link href="styles.css" rel="stylesheet">
 
-  <!-- Library Terkunci via jsDelivr: Live Scanner, Excel, Barcode Generator & Searchable Dropdown -->
+  <!-- Library Terkunci via jsDelivr: Decoder Barcode, Excel, Barcode Generator & Searchable Dropdown -->
   <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
@@ -36,6 +36,9 @@
 
 <!-- ==================== TOAST NOTIFIKASI IN-APP ==================== -->
 <div id="toastContainer" class="toast-container position-fixed top-0 end-0 p-3 no-print"></div>
+
+<!-- Elemen Decoder ZXing Tersembunyi untuk Pipeline Auto-Enhance -->
+<div id="qrDecoderHidden" aria-hidden="true"></div>
 
 <!-- ==================== ANTARMUKA LAYAR UTAMA ==================== -->
 <div class="screen-ui">
@@ -77,63 +80,54 @@
   <div class="nav-shell no-print">
     <div class="container-xl px-3">
       <ul class="nav nav-pills nav-scroll" id="mainTab" role="tablist">
-        <!-- 1. Kasir Belanja (Selalu Tampil) -->
         <li class="nav-item">
           <button class="nav-link active" id="btn-tab-kasir" data-bs-toggle="pill" data-bs-target="#tab-kasir" type="button">
             <i class="bi bi-cart-check me-1"></i> Kasir Belanja
           </button>
         </li>
 
-        <!-- 2. Pantauan Wajib Belanja (Sesuai Setting / Mode Admin) -->
         <li class="nav-item d-none" id="nav-wajib">
           <button class="nav-link" id="btn-tab-wajib" data-bs-toggle="pill" data-bs-target="#tab-wajib" type="button">
             <i class="bi bi-calendar2-check me-1"></i> Wajib Belanja
           </button>
         </li>
 
-        <!-- 3. Kulakan & Barcode (Admin) -->
         <li class="nav-item admin-only">
           <button class="nav-link" id="btn-tab-kulakan" data-bs-toggle="pill" data-bs-target="#tab-kulakan" type="button">
             <i class="bi bi-box-seam me-1"></i> Kulakan &amp; Barcode
           </button>
         </li>
 
-        <!-- 4. Riwayat & Batal Transaksi (Admin) -->
         <li class="nav-item admin-only">
           <button class="nav-link" id="btn-tab-riwayat" data-bs-toggle="pill" data-bs-target="#tab-riwayat" type="button">
             <i class="bi bi-clock-history me-1"></i> Riwayat &amp; Batal
           </button>
         </li>
 
-        <!-- 5. Tagihan Bon / Potong Gaji (Admin) -->
         <li class="nav-item admin-only">
           <button class="nav-link" id="btn-tab-bon" data-bs-toggle="pill" data-bs-target="#tab-bon" type="button">
             <i class="bi bi-receipt-cutoff me-1"></i> Potong Gaji
           </button>
         </li>
 
-        <!-- 6. Biaya Operasional & Simpanan (Admin) -->
         <li class="nav-item admin-only">
           <button class="nav-link" id="btn-tab-keuangan" data-bs-toggle="pill" data-bs-target="#tab-keuangan" type="button">
             <i class="bi bi-wallet2 me-1"></i> Biaya &amp; Simpanan
           </button>
         </li>
 
-        <!-- 7. Perhitungan, Slip & Export SHU (Terproteksi) -->
         <li class="nav-item d-none" id="nav-shu">
           <button class="nav-link" id="btn-tab-shu" data-bs-toggle="pill" data-bs-target="#tab-shu" type="button">
             <i class="bi bi-cash-coin me-1"></i> SHU &amp; Slip Lebaran
           </button>
         </li>
 
-        <!-- 8. Stok, Opname & Master Anggota (Admin) -->
         <li class="nav-item admin-only">
           <button class="nav-link" id="btn-tab-master" data-bs-toggle="pill" data-bs-target="#tab-master" type="button">
             <i class="bi bi-database-lock me-1"></i> Stok, Opname &amp; Anggota
           </button>
         </li>
 
-        <!-- 9. Panel Pengaturan Admin & Tutup Buku (Admin) -->
         <li class="nav-item admin-only">
           <button class="nav-link" id="btn-tab-admin" data-bs-toggle="pill" data-bs-target="#tab-admin" type="button">
             <i class="bi bi-sliders me-1"></i> Panel Admin
@@ -171,7 +165,7 @@
       <div class="tab-pane fade show active" id="tab-kasir">
         <div class="row g-3 align-items-start">
 
-          <!-- Kolom Kiri: Data Pembeli & Live Barcode Scanner -->
+          <!-- Kolom Kiri: Data Pembeli & Live Barcode Scanner Auto-Enhance -->
           <div class="col-lg-5">
             <!-- Kartu Pembeli (Searchable Dropdown Pegawai) -->
             <div class="app-card mb-3">
@@ -198,7 +192,7 @@
               </div>
             </div>
 
-            <!-- Kartu Scan Live Barcode & Pencarian Barang -->
+            <!-- Kartu Scan Live Barcode + Auto-Enhance & Pencarian Barang -->
             <div class="app-card">
               <div class="app-card-header">
                 <h6 class="section-title"><i class="bi bi-upc-scan"></i> Scan &amp; Cari Barang</h6>
@@ -208,11 +202,20 @@
               </div>
               <div class="app-card-body">
 
-                <!-- Live Camera Scanner Shell POS (Native HTTPS — Tanpa Foto) -->
+                <!-- Live Camera Scanner Shell POS (Auto-Enhance + Digital Zoom) -->
                 <div id="scannerShellPOS" class="scanner-shell">
                   <div class="scanner-toolbar">
                     <select id="camSelectPOS" class="form-select form-select-sm" onchange="gantiKameraAktif('POS', this.value)" title="Pilih Kamera"></select>
-                    <div class="d-flex gap-1">
+                    <div class="d-flex align-items-center gap-1">
+                      <select id="zoomSelectPOS" class="form-select form-select-sm" style="width:72px;" onchange="aturZoomScanner('POS', this.value)" title="Digital Zoom">
+                        <option value="1">1x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2">2x</option>
+                        <option value="2.5">2.5x</option>
+                      </select>
+                      <button id="btnEnhancePOS" type="button" class="btn btn-success btn-sm" onclick="toggleAutoEnhance('POS')" title="Auto-Enhance Kontras & Ketajaman">
+                        <i class="bi bi-magic"></i>
+                      </button>
                       <button id="btnTorchPOS" type="button" class="btn btn-outline-warning btn-sm d-none" onclick="toggleSenterKamera('POS')" title="Nyalakan/Matikan Senter">
                         <i class="bi bi-lightning-charge-fill"></i>
                       </button>
@@ -223,10 +226,13 @@
                   </div>
                   <div class="scanner-viewport-wrap">
                     <div id="readerPOS" class="scanner-viewport"></div>
+                    <div class="scanner-guide-overlay">
+                      <div class="scanner-guide-box"><div class="scanner-laser"></div></div>
+                    </div>
                   </div>
                   <div class="scanner-footer-bar">
-                    <span><span class="live-dot me-1"></span><span id="statusScanPOS">Arahkan kamera ke garis barcode...</span></span>
-                    <span class="opacity-75">Jeda 1 dtk</span>
+                    <span><span class="live-dot me-1"></span><span id="statusScanPOS">Arahkan garis barcode ke kotak hijau...</span></span>
+                    <span id="badgeEnhancePOS" class="badge bg-success">Enhance ON</span>
                   </div>
                 </div>
 
@@ -354,11 +360,20 @@
               </div>
               <div class="app-card-body">
 
-                <!-- Live Camera Scanner Shell KULAKAN -->
+                <!-- Live Camera Scanner Shell KULAKAN (Auto-Enhance + Digital Zoom) -->
                 <div id="scannerShellKULAK" class="scanner-shell">
                   <div class="scanner-toolbar">
                     <select id="camSelectKULAK" class="form-select form-select-sm" onchange="gantiKameraAktif('KULAK', this.value)" title="Pilih Kamera"></select>
-                    <div class="d-flex gap-1">
+                    <div class="d-flex align-items-center gap-1">
+                      <select id="zoomSelectKULAK" class="form-select form-select-sm" style="width:72px;" onchange="aturZoomScanner('KULAK', this.value)" title="Digital Zoom">
+                        <option value="1">1x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2">2x</option>
+                        <option value="2.5">2.5x</option>
+                      </select>
+                      <button id="btnEnhanceKULAK" type="button" class="btn btn-success btn-sm" onclick="toggleAutoEnhance('KULAK')" title="Auto-Enhance Kontras & Ketajaman">
+                        <i class="bi bi-magic"></i>
+                      </button>
                       <button id="btnTorchKULAK" type="button" class="btn btn-outline-warning btn-sm d-none" onclick="toggleSenterKamera('KULAK')" title="Nyalakan/Matikan Senter">
                         <i class="bi bi-lightning-charge-fill"></i>
                       </button>
@@ -369,15 +384,18 @@
                   </div>
                   <div class="scanner-viewport-wrap">
                     <div id="readerKULAK" class="scanner-viewport"></div>
+                    <div class="scanner-guide-overlay">
+                      <div class="scanner-guide-box"><div class="scanner-laser"></div></div>
+                    </div>
                   </div>
                   <div class="scanner-footer-bar">
-                    <span><span class="live-dot me-1"></span><span id="statusScanKULAK">Arahkan kamera ke barcode barang kulakan...</span></span>
-                    <span class="opacity-75">Jeda 1 dtk</span>
+                    <span><span class="live-dot me-1"></span><span id="statusScanKULAK">Arahkan garis barcode ke kotak hijau...</span></span>
+                    <span id="badgeEnhanceKULAK" class="badge bg-success">Enhance ON</span>
                   </div>
                 </div>
 
                 <!-- Searchable Dropdown Pilih Barang Terdaftar untuk Restok Cepat -->
-                <div class="mb-3 p-2.5 bg-light rounded-3 border px-3 py-2">
+                <div class="mb-3 bg-light rounded-3 border px-3 py-2">
                   <label for="kulakCariBarang" class="form-label small fw-semibold text-muted mb-1">
                     <i class="bi bi-search me-1"></i> Restok Cepat — Cari Barang Sudah Terdaftar (Opsional)
                   </label>
@@ -1351,7 +1369,7 @@
   </div>
 </div>
 
-<!-- Bootstrap JS & Aplikasi Utama V5 -->
+<!-- Bootstrap JS & Aplikasi Utama V5.1 -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="app.js"></script>
 </body>
