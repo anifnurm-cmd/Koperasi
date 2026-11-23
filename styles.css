@@ -1,6 +1,6 @@
 /* ============================================================================
- * SISTEM MANAJEMEN KOPERASI PEGAWAI MADRASAH — V5 FINAL (GITHUB PAGES)
- * Tema: Modern Emerald & Slate | Responsif Desktop & Mobile
+ * SISTEM MANAJEMEN KOPERASI PEGAWAI MADRASAH — V5.1 FINAL (GITHUB PAGES)
+ * Tema: Modern Emerald & Slate | Auto-Enhance Live Scanner | Responsif
  * ============================================================================ */
 
 :root {
@@ -32,9 +32,12 @@ body {
   min-height: 100vh;
 }
 
-/* Angka keuangan sejajar sempurna */
 .num {
   font-variant-numeric: tabular-nums;
+}
+
+.fw-extrabold {
+  font-weight: 800 !important;
 }
 
 /* Proteksi Elemen Pengelola: Kompatibel 100% dengan d-flex, grid, dan tabel */
@@ -266,7 +269,7 @@ body:not(.is-admin) .admin-only {
   font-weight: 600;
 }
 
-/* ==================== LIVE BARCODE SCANNER (NATIVE HTTPS) ==================== */
+/* ==================== LIVE BARCODE SCANNER + AUTO-ENHANCE ==================== */
 .scanner-shell {
   display: none;
   background: #0f172a;
@@ -296,25 +299,59 @@ body:not(.is-admin) .admin-only {
   color: #f8fafc;
   border: 1px solid rgba(255, 255, 255, 0.2);
   font-size: 0.78rem;
-  max-width: 210px;
+  max-width: 195px;
 }
 
 .scanner-viewport-wrap {
   position: relative;
   width: 100%;
   background: #000000;
+  overflow: hidden;
 }
 
 .scanner-viewport {
   width: 100%;
-  min-height: 220px;
+  min-height: 240px;
 }
 
-.scanner-viewport video {
-  width: 100% !important;
-  height: auto !important;
-  display: block;
+.scanner-video {
+  width: 100%;
+  height: 240px;
   object-fit: cover;
+  display: block;
+  transition: transform 0.18s ease, filter 0.18s ease;
+}
+
+.scanner-video.enhanced-preview {
+  filter: contrast(1.38) brightness(1.04) saturate(0.2);
+}
+
+.scanner-guide-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scanner-guide-box {
+  width: 82%;
+  height: 56%;
+  border: 2px solid #22c55e;
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.48);
+  position: relative;
+}
+
+.scanner-laser {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  top: 50%;
+  height: 2px;
+  background: rgba(239, 68, 68, 0.85);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.9);
 }
 
 .scanner-footer-bar {
@@ -341,6 +378,17 @@ body:not(.is-admin) .admin-only {
   0% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.4; transform: scale(1.25); }
   100% { opacity: 1; transform: scale(1); }
+}
+
+/* Decoder tersembunyi di luar layar (jangan display:none agar canvas internal stabil) */
+#qrDecoderHidden {
+  position: fixed;
+  left: -9999px;
+  top: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 /* ==================== SEARCHABLE DROPDOWN (TOM SELECT) ==================== */
