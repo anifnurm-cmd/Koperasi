@@ -1047,13 +1047,14 @@ function mulaiKameraLive_(mode, preferredDeviceId) {
   }
 
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showToast('Browser pada perangkat ini tidak mendukung akses kamera live. Buka di Chrome atau Safari terbaru.', 'danger');
+    showToast('Browser tidak mendukung akses kamera live. Gunakan Chrome atau Edge terbaru.', 'danger');
     return;
   }
 
   const readerId = mode === 'POS' ? 'readerPOS' : 'readerKULAK';
   const shell = document.getElementById(mode === 'POS' ? 'scannerShellPOS' : 'scannerShellKULAK');
   const btn = document.getElementById(mode === 'POS' ? 'btnCamPOS' : 'btnCamKULAK');
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
 
   isCameraTransitioning = true;
   isTorchOn = false;
@@ -1064,12 +1065,13 @@ function mulaiKameraLive_(mode, preferredDeviceId) {
     btn.className = 'btn btn-danger btn-sm';
     btn.innerHTML = '<i class="bi bi-camera-video-off-fill me-1"></i> Matikan Kamera';
   }
-  setStatusLiveScan(mode, 'Membuka kamera live...');
+  setStatusLiveScan(mode, 'Mendeteksi kamera perangkat...');
 
   const formats = getFormatBarcodeDidukung_();
   const instanceConfig = {
     verbose: false,
-    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    // Pada desktop/laptop, matikan BarcodeDetector eksperimental agar mesin ZXing bekerja stabil untuk EAN-13/Code128
+    experimentalFeatures: { useBarCodeDetectorIfSupported: isMobile }
   };
   if (formats) instanceConfig.formatsToSupport = formats;
 
@@ -1079,18 +1081,8 @@ function mulaiKameraLive_(mode, preferredDeviceId) {
     html5QrCode = new Html5Qrcode(readerId);
   }
 
-  const scanOptions = {
-    fps: 15,
-    qrbox: (vw, vh) => {
-      const w = Math.min(300, Math.max(180, Math.floor(vw * 0.82)));
-      const h = Math.min(140, Math.max(95, Math.floor(vh * 0.42)));
-      return { width: w, height: h };
-    }
-  };
-
   const onDecodeSuccess = (decodedText) => {
     const now = Date.now();
-    // Jeda anti-scan ganda: 1 detik (1000 ms)
     if (now - lastScanTimestamp < SCAN_COOLDOWN_MS) return;
     lastScanTimestamp = now;
 
@@ -1109,40 +1101,74 @@ function mulaiKameraLive_(mode, preferredDeviceId) {
     }
   };
 
-  const cameraTarget = preferredDeviceId ? preferredDeviceId : { facingMode: 'environment' };
+  const buildScanOptions = (deviceId) => {
+    const opts = {
+      fps: isMobile ? 15 : 10,
+      disableFlip: false, // Tetap terbaca meski webcam laptop dalam mode mirror/terbalik
+      qrbox: (vw, vh) => {
+        // Kotak scan lebih lebar agar barcode 1D tidak terpotong di kamera laptop
+        const w = Math.min(440, Math.max(220, Math.floor(vw * 0.88)));
+        const h = Math.min(220, Math.max(120, Math.floor(vh * 0.58)));
+        return { width: w, height: h };
+      }
+    };
+    if (deviceId) {
+      opts.videoConstraints = {
+        deviceId: { ideal: deviceId },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      };
+    }
+    return opts;
+  };
 
-  html5QrCode.start(cameraTarget, scanOptions, onDecodeSuccess, () => {})
+  // Deteksi daftar kamera terlebih dahulu (jauh lebih stabil untuk webcam bawaan laptop)
+  Html5Qrcode.getCameras()
+    .then(devices => {
+      if (!devices || devices.length === 0) {
+        throw new Error('NotFoundError: Tidak ada perangkat kamera yang terdeteksi.');
+      }
+
+      let chosenId = preferredDeviceId;
+      if (!chosenId) {
+        if (isMobile) {
+          const backCam = devices.find(d => /back|rear|belakang|environment/i.test(d.label || ''));
+          chosenId = backCam ? backCam.id : devices[0].id;
+        } else {
+          // Pada laptop, langsung pilih webcam bawaan pertama (atau kamera yang bukan virtual)
+          const fisikCam = devices.find(d => !/virtual|obs|snap/i.test(d.label || ''));
+          chosenId = fisikCam ? fisikCam.id : devices[0].id;
+        }
+      }
+
+      activeCameraId = chosenId;
+      setStatusLiveScan(mode, 'Membuka kamera HD...');
+      return html5QrCode.start(chosenId, buildScanOptions(chosenId), onDecodeSuccess, () => {});
+    })
     .then(() => {
       isCameraTransitioning = false;
-      activeCameraId = preferredDeviceId || null;
-      setStatusLiveScan(mode, 'Live aktif — arahkan ke garis barcode...');
+      setStatusLiveScan(mode, 'Live aktif — posisikan barcode 20–30 cm dari kamera...');
       muatDaftarKameraDanSenter_(mode);
     })
     .catch(errUtama => {
-      // Jika constraint facingMode gagal (misal laptop hanya punya 1 kamera depan), fallback ke kamera pertama
       const errStr = String(errUtama || '');
       const denied = /NotAllowedError|Permission denied|PermissionDismissed/i.test(errStr);
 
-      if (!denied && !preferredDeviceId && html5QrCode) {
-        Html5Qrcode.getCameras().then(devices => {
-          if (!devices || devices.length === 0) throw errUtama;
-          const back = devices.find(d => /back|rear|belakang|environment/i.test(d.label || ''));
-          const chosen = back ? back.id : devices[0].id;
-          activeCameraId = chosen;
-          return html5QrCode.start(chosen, scanOptions, onDecodeSuccess, () => {});
-        }).then(() => {
-          isCameraTransitioning = false;
-          setStatusLiveScan(mode, 'Live aktif — arahkan ke garis barcode...');
-          muatDaftarKameraDanSenter_(mode);
-        }).catch(errFinal => {
-          tanganiGagalKameraLive_(mode, errFinal);
-        });
+      // Fallback terakhir tanpa batasan resolusi HD (untuk webcam laptop lama)
+      if (!denied && html5QrCode) {
+        const fallbackTarget = isMobile ? { facingMode: 'environment' } : { facingMode: 'user' };
+        html5QrCode.start(fallbackTarget, { fps: 10, disableFlip: false }, onDecodeSuccess, () => {})
+          .then(() => {
+            isCameraTransitioning = false;
+            setStatusLiveScan(mode, 'Live aktif — arahkan ke garis barcode...');
+            muatDaftarKameraDanSenter_(mode);
+          })
+          .catch(errFallback => tanganiGagalKameraLive_(mode, errFallback));
       } else {
         tanganiGagalKameraLive_(mode, errUtama);
       }
     });
 }
-
 function muatDaftarKameraDanSenter_(mode) {
   const sel = document.getElementById(mode === 'POS' ? 'camSelectPOS' : 'camSelectKULAK');
   const torchBtn = document.getElementById(mode === 'POS' ? 'btnTorchPOS' : 'btnTorchKULAK');
