@@ -1,20 +1,20 @@
 /**
  * ============================================================================
- * SISTEM MANAJEMEN KOPERASI PEGAWAI MADRASAH — V5 FINAL (GITHUB PAGES)
+ * SISTEM MANAJEMEN KOPERASI PEGAWAI MADRASAH — V5.1 FINAL (GITHUB PAGES)
  * Arsitektur: Frontend Statis HTTPS + Backend Container Google Sheet (doPost)
- * Fitur: Live Barcode Scanner Native (+ Switch Kamera & Senter), Searchable
- *        Dropdown (Tom Select), Toast/Confirm In-App, & Export Excel Murni
+ * Fitur: Live Barcode Scanner Auto-Enhance + Digital Zoom + Switch Kamera &
+ *        Senter, Searchable Dropdown (Tom Select), Toast/Confirm In-App, Excel
  * ============================================================================
  */
 
-// >>> WAJIB ISI URL WEB APP APPS SCRIPT ANDA DI SINI (BERAKHIRAN /exec) <<<
+// >>> ISI URL WEB APP APPS SCRIPT ANDA DI SINI (BERAKHIRAN /exec) <<<
 // Contoh: 'https://script.google.com/macros/s/AKfycbxxxxxxxxxxxxxxxx/exec'
 const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbxZr1KLtzkby3CnYaOnpUpLn1fkpCgpk9didAaRR_ofRU9iWm78m5AWsnHBqvxyZ-7rPw/exec';
 const API_URL_STORAGE_KEY = 'KOPERASI_V5_API_URL';
 
 /**
  * ============================================================================
- * STATE GLOBAL, REGISTRY TOM SELECT & KONFIGURASI LIVE SCANNER
+ * STATE GLOBAL, REGISTRY TOM SELECT & STATE LIVE SCANNER
  * ============================================================================
  */
 let STATE = {
@@ -59,19 +59,31 @@ const TS = {
   simpAnggota: null
 };
 
-// State Live Barcode Scanner Native (Tanpa Foto — Jeda 1 Detik + Beep + Senter)
-let html5QrCode = null;
+// State Live Barcode Scanner + Auto-Enhance V5.1 (Jeda 1 Detik + Beep + Zoom)
+let liveStream = null;
+let liveVideoEl = null;
+let scanLoopTimer = null;
+let scanSessionId = 0;
+let isDecodingFrame = false;
+let decodePassCounter = 0;
 let activeScannerMode = null;
 let activeCameraId = null;
 let isCameraTransitioning = false;
 let isTorchOn = false;
+let autoEnhanceAktif = true;
+let digitalZoomLevel = 1;
 let lastScanTimestamp = 0;
 let audioCtx = null;
+let zxingDecoder = null;
+let nativeBarcodeDetector = null;
+let nativeDetectorChecked = false;
+let enhanceCanvas = null;
+let enhanceCtx = null;
 const SCAN_COOLDOWN_MS = 1000;
 
 /**
  * ============================================================================
- * KLIEN API GOOGLE SHEET CONTAINER (BEBAS CORS PREFLIGHT)
+ * KLIEN API GOOGLE SHEET CONTAINER (BEBAS CORS & ANTI MULTI-AKUN GOOGLE)
  * ============================================================================
  */
 function getApiUrl() {
@@ -94,15 +106,18 @@ async function callServer(action, ...args) {
   try {
     response = await fetch(url, {
       method: 'POST',
+      mode: 'cors',
+      credentials: 'omit',
       redirect: 'follow',
       headers: {
-        // text/plain adalah CORS simple request (tanpa preflight OPTIONS) sehingga 100% lolos Apps Script
         'Content-Type': 'text/plain;charset=utf-8'
       },
       body: JSON.stringify({ action, args })
     });
   } catch (netErr) {
-    throw new Error('Tidak dapat menghubungi server Google Sheet. Periksa koneksi internet & pastikan URL Web App benar.');
+    throw new Error(
+      'Gagal terhubung ke Apps Script (CORS/Jaringan). Pastikan: (1) Deployment memakai New version Code.gs V5, (2) Who has access = Anyone, (3) URL berakhiran /exec.'
+    );
   }
 
   const rawText = await response.text();
@@ -111,7 +126,7 @@ async function callServer(action, ...args) {
     json = JSON.parse(rawText);
   } catch (parseErr) {
     if (/accounts\.google\.com|ServiceLogin|<!DOCTYPE html/i.test(rawText)) {
-      throw new Error('Server menolak akses (akses belum publik). Pastikan Deploy Apps Script diatur: Execute as = Me, Who has access = Anyone.');
+      throw new Error('Server mengembalikan halaman HTML/Login. Pastikan Deploy menggunakan New version Code.gs V5 dengan akses "Anyone".');
     }
     throw new Error('Respons server tidak valid. Pastikan Code.gs V5 sudah di-deploy sebagai versi terbaru.');
   }
@@ -182,7 +197,7 @@ function getLocalYearMonth() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  // Cek apakah ada parameter ?api=... di URL (memudahkan sharing link siap pakai)
+  // Mendukung parameter ?api=... di URL agar mudah dibagikan siap pakai
   const params = new URLSearchParams(window.location.search);
   const apiParam = params.get('api');
   if (apiParam && isValidApiUrl(apiParam)) {
@@ -203,13 +218,12 @@ window.addEventListener('DOMContentLoaded', () => {
     if (el) el.value = thnNow;
   });
 
-  // Inisialisasi seluruh Searchable Dropdown (Tom Select)
   initSearchableDropdowns();
 
   // Matikan live scanner otomatis saat berpindah tab
   document.querySelectorAll('#mainTab button[data-bs-toggle="pill"]').forEach(btn => {
     btn.addEventListener('shown.bs.tab', () => {
-      if (html5QrCode) hentikanScannerKamera();
+      if (liveStream) hentikanScannerKamera();
     });
   });
 
@@ -225,12 +239,11 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Kembalikan tampilan layar hanya setelah dialog cetak benar-benar selesai
+  // Kembalikan tampilan layar hanya setelah dialog cetak selesai
   window.addEventListener('afterprint', () => {
     document.body.classList.remove('mode-print-slip', 'mode-print-barcode');
   });
 
-  // Muat data atau buka panduan koneksi jika URL API belum diisi
   if (!getApiUrl()) {
     tampilkanBannerApi(true);
     bukaModalApiConfig();
@@ -309,7 +322,6 @@ function initSearchableDropdowns() {
       if (!barcode) return;
       document.getElementById('posBarcodeInput').value = barcode;
       tambahKeKeranjangManual(false);
-      // Kosongkan kembali pilihan agar siap mencari barang berikutnya
       TS.posPilihBarang.clear(true);
     }
   });
@@ -603,7 +615,7 @@ async function prosesLoginAdmin() {
 
 function logoutAdmin() {
   PIN_PENGELOLA_AKTIF = '';
-  if (html5QrCode) hentikanScannerKamera();
+  if (liveStream) hentikanScannerKamera();
   bukaTab('btn-tab-kasir');
   showToast('Mode Pengelola telah dikunci kembali ke Mode Kasir.', 'info');
   muatData('Mengunci sesi pengelola...');
@@ -665,17 +677,17 @@ function renderApp(data) {
 
   const namaKop = data.config.NAMA_KOPERASI || 'Koperasi Pegawai Madrasah';
   document.getElementById('txtNamaKoperasi').innerText = namaKop;
-  document.title = `${namaKop} — Sistem Terpadu V5`;
+  document.title = `${namaKop} — Sistem Terpadu V5.1`;
   document.getElementById('txtTargetWajibLabel').innerText = formatRp(data.config.WAJIB_BELANJA_BULANAN);
   aturVisibilitasMenu(data);
 
-  // 1. Segarkan Searchable Dropdown Pegawai Aktif (Kasir POS & Simpanan)
+  // 1. Segarkan Searchable Dropdown Pegawai Aktif
   const pegawaiAktif = (data.anggotaList || []).filter(a => a.status === 'Aktif');
   segarkanTomSelect(TS.posAnggota, pegawaiAktif, true);
   segarkanTomSelect(TS.simpAnggota, pegawaiAktif, true);
   cekStatusWajibAnggota();
 
-  // 2. Segarkan Searchable Dropdown Barang (POS, Kulakan Restok, & Generator Barcode)
+  // 2. Segarkan Searchable Dropdown Barang
   const semuaBarang = data.barangList || [];
   segarkanTomSelect(TS.posPilihBarang, semuaBarang, false);
   segarkanTomSelect(TS.kulakCariBarang, semuaBarang, false);
@@ -685,7 +697,7 @@ function renderApp(data) {
   renderTabelWajibBelanja();
   renderTabSHU();
 
-  // 4. Render Modul Khusus Pengelola (Fungsi berada di Part 4B)
+  // 4. Render Modul Khusus Pengelola (Part 3B)
   if (data.isAdmin) {
     renderTabelRiwayat();
     renderTabBon();
@@ -942,7 +954,9 @@ function renderTabelWajibBelanja() {
 
 /**
  * ============================================================================
- * MODUL 2: LIVE BARCODE SCANNER NATIVE (HTTPS GITHUB PAGES — TANPA FOTO)
+ * MODUL 2: LIVE BARCODE SCANNER + AUTO-ENHANCE & DIGITAL ZOOM (V5.1)
+ * Pipeline: HD Stream -> Crop ROI + Zoom -> Auto-Contrast Stretch + 3x3
+ *           Sharpen -> Dual-Pass (Grayscale / Binarized) -> Native / ZXing
  * ============================================================================
  */
 function getFormatBarcodeDidukung_() {
@@ -960,6 +974,35 @@ function getFormatBarcodeDidukung_() {
   ];
 }
 
+async function initDecoders_() {
+  if (!nativeDetectorChecked) {
+    nativeDetectorChecked = true;
+    if (typeof window.BarcodeDetector !== 'undefined') {
+      try {
+        const supported = await window.BarcodeDetector.getSupportedFormats();
+        if (supported.includes('ean_13') && supported.includes('code_128')) {
+          const wanted = ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'itf', 'codabar', 'qr_code']
+            .filter(f => supported.includes(f));
+          nativeBarcodeDetector = new window.BarcodeDetector({ formats: wanted });
+        }
+      } catch (e) {
+        nativeBarcodeDetector = null;
+      }
+    }
+  }
+
+  if (!zxingDecoder && typeof Html5Qrcode !== 'undefined') {
+    const formats = getFormatBarcodeDidukung_();
+    try {
+      zxingDecoder = formats
+        ? new Html5Qrcode('qrDecoderHidden', { formatsToSupport: formats, verbose: false })
+        : new Html5Qrcode('qrDecoderHidden', { verbose: false });
+    } catch (e) {
+      zxingDecoder = new Html5Qrcode('qrDecoderHidden');
+    }
+  }
+}
+
 function setStatusLiveScan(mode, teks, isError = false) {
   const el = document.getElementById(mode === 'POS' ? 'statusScanPOS' : 'statusScanKULAK');
   if (!el) return;
@@ -967,12 +1010,51 @@ function setStatusLiveScan(mode, teks, isError = false) {
   el.innerText = teks;
 }
 
+function perbaruiTampilanVideo_(mode) {
+  if (!liveVideoEl) return;
+  liveVideoEl.style.transform = `scale(${digitalZoomLevel})`;
+  liveVideoEl.classList.toggle('enhanced-preview', autoEnhanceAktif);
+
+  const btnEnh = document.getElementById(mode === 'POS' ? 'btnEnhancePOS' : 'btnEnhanceKULAK');
+  const badgeEnh = document.getElementById(mode === 'POS' ? 'badgeEnhancePOS' : 'badgeEnhanceKULAK');
+  if (btnEnh) {
+    btnEnh.className = autoEnhanceAktif ? 'btn btn-success btn-sm' : 'btn btn-outline-secondary btn-sm';
+  }
+  if (badgeEnh) {
+    badgeEnh.className = autoEnhanceAktif ? 'badge bg-success' : 'badge bg-secondary';
+    badgeEnh.innerText = autoEnhanceAktif ? `Enhance ON (${digitalZoomLevel}x)` : `Normal (${digitalZoomLevel}x)`;
+  }
+}
+
+function toggleAutoEnhance(mode) {
+  autoEnhanceAktif = !autoEnhanceAktif;
+  perbaruiTampilanVideo_(mode);
+  showToast(
+    autoEnhanceAktif
+      ? 'Auto-Enhance aktif (Auto-Contrast + Sharpening + Dual-Pass).'
+      : 'Auto-Enhance dimatikan (Mode kamera normal).',
+    'info'
+  );
+}
+
+function aturZoomScanner(mode, val) {
+  const z = parseFloat(val) || 1;
+  digitalZoomLevel = Math.min(2.5, Math.max(1, z));
+  const selPos = document.getElementById('zoomSelectPOS');
+  const selKul = document.getElementById('zoomSelectKULAK');
+  if (selPos) selPos.value = String(digitalZoomLevel);
+  if (selKul) selKul.value = String(digitalZoomLevel);
+  perbaruiTampilanVideo_(mode);
+}
+
 function resetUiKamera_(mode) {
   const shell = document.getElementById(mode === 'POS' ? 'scannerShellPOS' : 'scannerShellKULAK');
+  const reader = document.getElementById(mode === 'POS' ? 'readerPOS' : 'readerKULAK');
   const btn = document.getElementById(mode === 'POS' ? 'btnCamPOS' : 'btnCamKULAK');
   const torchBtn = document.getElementById(mode === 'POS' ? 'btnTorchPOS' : 'btnTorchKULAK');
 
   if (shell) shell.classList.remove('active');
+  if (reader) reader.innerHTML = '';
   if (btn) {
     btn.className = 'btn btn-emerald btn-sm';
     btn.innerHTML = mode === 'POS'
@@ -988,226 +1070,374 @@ function resetUiKamera_(mode) {
 }
 
 function hentikanScannerKamera() {
-  if (!html5QrCode) return Promise.resolve();
+  scanSessionId += 1;
+  if (scanLoopTimer) {
+    clearTimeout(scanLoopTimer);
+    scanLoopTimer = null;
+  }
+  isDecodingFrame = false;
+
   const prevMode = activeScannerMode;
-  const instance = html5QrCode;
-  html5QrCode = null;
+  if (liveStream) {
+    try {
+      liveStream.getTracks().forEach(t => t.stop());
+    } catch (e) {}
+    liveStream = null;
+  }
+  if (liveVideoEl) {
+    try { liveVideoEl.srcObject = null; } catch (e) {}
+    liveVideoEl = null;
+  }
+
   activeScannerMode = null;
   activeCameraId = null;
 
-  return Promise.resolve()
-    .then(() => instance.stop())
-    .catch(() => {})
-    .then(() => {
-      try { instance.clear(); } catch (e) {}
-      if (prevMode) resetUiKamera_(prevMode);
-    });
+  if (prevMode) resetUiKamera_(prevMode);
+  return Promise.resolve();
 }
 
 function toggleCameraScanner(mode) {
   if (isCameraTransitioning) return;
 
-  if (html5QrCode && activeScannerMode === mode) {
-    isCameraTransitioning = true;
-    hentikanScannerKamera().finally(() => { isCameraTransitioning = false; });
+  if (liveStream && activeScannerMode === mode) {
+    hentikanScannerKamera();
     return;
   }
 
-  if (html5QrCode) {
-    isCameraTransitioning = true;
-    hentikanScannerKamera().then(() => {
-      isCameraTransitioning = false;
-      mulaiKameraLive_(mode, null);
-    });
-    return;
+  if (liveStream) {
+    hentikanScannerKamera();
   }
 
-  // Dipanggil sinkron dalam user gesture klik tombol
   mulaiKameraLive_(mode, null);
 }
 
 function gantiKameraAktif(mode, deviceId) {
   if (!deviceId || isCameraTransitioning || deviceId === activeCameraId) return;
-  isCameraTransitioning = true;
-  hentikanScannerKamera().then(() => {
-    isCameraTransitioning = false;
-    mulaiKameraLive_(mode, deviceId);
-  });
+  hentikanScannerKamera();
+  mulaiKameraLive_(mode, deviceId);
 }
 
-function mulaiKameraLive_(mode, preferredDeviceId) {
-  if (typeof Html5Qrcode === 'undefined') {
-    showToast('Pustaka Live Scanner belum termuat. Periksa koneksi internet lalu Refresh.', 'danger');
-    return;
-  }
-
+async function mulaiKameraLive_(mode, preferredDeviceId) {
   if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
     showToast('Live Scanner membutuhkan halaman HTTPS (GitHub Pages).', 'danger');
     return;
   }
-
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     showToast('Browser tidak mendukung akses kamera live. Gunakan Chrome atau Edge terbaru.', 'danger');
     return;
   }
 
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
   const readerId = mode === 'POS' ? 'readerPOS' : 'readerKULAK';
   const shell = document.getElementById(mode === 'POS' ? 'scannerShellPOS' : 'scannerShellKULAK');
   const btn = document.getElementById(mode === 'POS' ? 'btnCamPOS' : 'btnCamKULAK');
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+  const mySession = ++scanSessionId;
 
   isCameraTransitioning = true;
   isTorchOn = false;
   activeScannerMode = mode;
+
+  // Pada laptop, otomatis aktifkan zoom 1.5x + Auto-Enhance agar jarak fokus 25-40 cm terbaca jelas
+  if (!preferredDeviceId) {
+    autoEnhanceAktif = true;
+    digitalZoomLevel = isMobile ? 1 : 1.5;
+    const zEl = document.getElementById(mode === 'POS' ? 'zoomSelectPOS' : 'zoomSelectKULAK');
+    if (zEl) zEl.value = String(digitalZoomLevel);
+  }
 
   if (shell) shell.classList.add('active');
   if (btn) {
     btn.className = 'btn btn-danger btn-sm';
     btn.innerHTML = '<i class="bi bi-camera-video-off-fill me-1"></i> Matikan Kamera';
   }
-  setStatusLiveScan(mode, 'Mendeteksi kamera perangkat...');
-
-  const formats = getFormatBarcodeDidukung_();
-  const instanceConfig = {
-    verbose: false,
-    // Pada desktop/laptop, matikan BarcodeDetector eksperimental agar mesin ZXing bekerja stabil untuk EAN-13/Code128
-    experimentalFeatures: { useBarCodeDetectorIfSupported: isMobile }
-  };
-  if (formats) instanceConfig.formatsToSupport = formats;
+  setStatusLiveScan(mode, 'Membuka kamera HD + Auto-Enhance...');
 
   try {
-    html5QrCode = new Html5Qrcode(readerId, instanceConfig);
+    await initDecoders_();
+
+    const videoReq = {
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    };
+    if (preferredDeviceId) {
+      videoReq.deviceId = { exact: preferredDeviceId };
+    } else if (isMobile) {
+      videoReq.facingMode = { ideal: 'environment' };
+    }
+
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: videoReq, audio: false });
+    } catch (e1) {
+      const fallbackVideo = preferredDeviceId ? { deviceId: { ideal: preferredDeviceId } } : true;
+      stream = await navigator.mediaDevices.getUserMedia({ video: fallbackVideo, audio: false });
+    }
+
+    if (mySession !== scanSessionId) {
+      stream.getTracks().forEach(t => t.stop());
+      return;
+    }
+
+    liveStream = stream;
+
+    const videoTrack = stream.getVideoTracks()[0];
+    if (videoTrack) {
+      const settings = videoTrack.getSettings ? videoTrack.getSettings() : {};
+      if (settings.deviceId) activeCameraId = settings.deviceId;
+      await terapkanOptimasiTrack_(videoTrack);
+    }
+
+    const readerEl = document.getElementById(readerId);
+    readerEl.innerHTML = '';
+    const video = document.createElement('video');
+    video.className = 'scanner-video';
+    video.setAttribute('playsinline', 'true');
+    video.setAttribute('autoplay', 'true');
+    video.muted = true;
+    video.srcObject = stream;
+    readerEl.appendChild(video);
+    liveVideoEl = video;
+
+    await video.play();
+    if (mySession !== scanSessionId) return;
+
+    perbaruiTampilanVideo_(mode);
+    muatDaftarKameraDanSenter_(mode, videoTrack);
+
+    isCameraTransitioning = false;
+    setStatusLiveScan(
+      mode,
+      isMobile
+        ? 'Live aktif — arahkan barcode ke kotak hijau...'
+        : 'Auto-Enhance aktif — pegang barcode 25–40 cm dari lensa...'
+    );
+
+    decodePassCounter = 0;
+    jadwalkanSiklusScan_(mode, mySession);
+  } catch (err) {
+    tanganiGagalKameraLive_(mode, err);
+  }
+}
+
+async function terapkanOptimasiTrack_(track) {
+  if (!track || !track.getCapabilities || !track.applyConstraints) return;
+  try {
+    const caps = track.getCapabilities();
+    const adv = {};
+    if (caps.focusMode && caps.focusMode.includes('continuous')) adv.focusMode = 'continuous';
+    if (caps.exposureMode && caps.exposureMode.includes('continuous')) adv.exposureMode = 'continuous';
+    if (caps.sharpness && typeof caps.sharpness.max === 'number') {
+      adv.sharpness = Math.min(caps.sharpness.max, (caps.sharpness.min + caps.sharpness.max) * 0.78);
+    }
+    if (caps.contrast && typeof caps.contrast.max === 'number') {
+      adv.contrast = Math.min(caps.contrast.max, (caps.contrast.min + caps.contrast.max) * 0.68);
+    }
+    if (Object.keys(adv).length > 0) {
+      await track.applyConstraints({ advanced: [adv] });
+    }
   } catch (e) {
-    html5QrCode = new Html5Qrcode(readerId);
+    // Abaikan jika driver webcam tidak mengizinkan constraint lanjutan
+  }
+}
+
+function jadwalkanSiklusScan_(mode, sessionId) {
+  if (sessionId !== scanSessionId || !liveStream) return;
+  scanLoopTimer = setTimeout(async () => {
+    if (sessionId !== scanSessionId || !liveStream) return;
+    if (!isDecodingFrame && liveVideoEl && liveVideoEl.readyState >= 2 && liveVideoEl.videoWidth > 0) {
+      isDecodingFrame = true;
+      try {
+        await prosesSatuFrameEnhanced_(mode, sessionId);
+      } finally {
+        isDecodingFrame = false;
+      }
+    }
+    jadwalkanSiklusScan_(mode, sessionId);
+  }, 190);
+}
+
+async function prosesSatuFrameEnhanced_(mode, sessionId) {
+  if (!liveVideoEl || sessionId !== scanSessionId) return;
+
+  const vw = liveVideoEl.videoWidth;
+  const vh = liveVideoEl.videoHeight;
+  if (!vw || !vh) return;
+
+  const cropW = Math.max(160, Math.floor((vw * 0.88) / digitalZoomLevel));
+  const cropH = Math.max(100, Math.floor((vh * 0.62) / digitalZoomLevel));
+  const sx = Math.max(0, Math.floor((vw - cropW) / 2));
+  const sy = Math.max(0, Math.floor((vh - cropH) / 2));
+
+  const targetW = Math.min(680, Math.max(420, cropW));
+  const targetH = Math.max(140, Math.round((cropH / cropW) * targetW));
+
+  if (!enhanceCanvas) {
+    enhanceCanvas = document.createElement('canvas');
+    enhanceCtx = enhanceCanvas.getContext('2d', { willReadFrequently: true });
+  }
+  if (enhanceCanvas.width !== targetW || enhanceCanvas.height !== targetH) {
+    enhanceCanvas.width = targetW;
+    enhanceCanvas.height = targetH;
   }
 
-  const onDecodeSuccess = (decodedText) => {
-    const now = Date.now();
-    if (now - lastScanTimestamp < SCAN_COOLDOWN_MS) return;
-    lastScanTimestamp = now;
+  enhanceCtx.imageSmoothingEnabled = true;
+  enhanceCtx.imageSmoothingQuality = 'high';
+  enhanceCtx.drawImage(liveVideoEl, sx, sy, cropW, cropH, 0, 0, targetW, targetH);
 
-    const cleanCode = String(decodedText || '').trim();
-    if (!cleanCode) return;
+  decodePassCounter += 1;
 
-    if (mode === 'POS') {
-      document.getElementById('posBarcodeInput').value = cleanCode;
-      tambahKeKeranjangManual(true);
-    } else {
-      playBeep(1150, 95);
-      document.getElementById('kulakBarcode').value = cleanCode;
-      cekBarangKulakan();
-      setStatusLiveScan('KULAK', `Terpindai: ${cleanCode}`, false);
-      showToast(`Barcode "${cleanCode}" berhasil dipindai.`, 'success');
-    }
-  };
+  if (autoEnhanceAktif) {
+    const imgData = enhanceCtx.getImageData(0, 0, targetW, targetH);
+    const useBinarize = (decodePassCounter % 2 === 1);
+    jalankanFilterAutoEnhance_(imgData.data, targetW, targetH, useBinarize);
+    enhanceCtx.putImageData(imgData, 0, 0);
+  }
 
-  const buildScanOptions = (deviceId) => {
-    const opts = {
-      fps: isMobile ? 15 : 10,
-      disableFlip: false, // Tetap terbaca meski webcam laptop dalam mode mirror/terbalik
-      qrbox: (vw, vh) => {
-        // Kotak scan lebih lebar agar barcode 1D tidak terpotong di kamera laptop
-        const w = Math.min(440, Math.max(220, Math.floor(vw * 0.88)));
-        const h = Math.min(220, Math.max(120, Math.floor(vh * 0.58)));
-        return { width: w, height: h };
+  let decodedText = '';
+
+  if (nativeBarcodeDetector) {
+    try {
+      const results = await nativeBarcodeDetector.detect(enhanceCanvas);
+      if (results && results.length > 0 && results[0].rawValue) {
+        decodedText = results[0].rawValue;
       }
-    };
-    if (deviceId) {
-      opts.videoConstraints = {
-        deviceId: { ideal: deviceId },
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      };
-    }
-    return opts;
-  };
+    } catch (e) {}
+  }
 
-  // Deteksi daftar kamera terlebih dahulu (jauh lebih stabil untuk webcam bawaan laptop)
-  Html5Qrcode.getCameras()
-    .then(devices => {
-      if (!devices || devices.length === 0) {
-        throw new Error('NotFoundError: Tidak ada perangkat kamera yang terdeteksi.');
-      }
+  if (!decodedText && zxingDecoder && sessionId === scanSessionId) {
+    decodedText = await decodeCanvasViaZxing_(enhanceCanvas);
+  }
 
-      let chosenId = preferredDeviceId;
-      if (!chosenId) {
-        if (isMobile) {
-          const backCam = devices.find(d => /back|rear|belakang|environment/i.test(d.label || ''));
-          chosenId = backCam ? backCam.id : devices[0].id;
-        } else {
-          // Pada laptop, langsung pilih webcam bawaan pertama (atau kamera yang bukan virtual)
-          const fisikCam = devices.find(d => !/virtual|obs|snap/i.test(d.label || ''));
-          chosenId = fisikCam ? fisikCam.id : devices[0].id;
-        }
-      }
-
-      activeCameraId = chosenId;
-      setStatusLiveScan(mode, 'Membuka kamera HD...');
-      return html5QrCode.start(chosenId, buildScanOptions(chosenId), onDecodeSuccess, () => {});
-    })
-    .then(() => {
-      isCameraTransitioning = false;
-      setStatusLiveScan(mode, 'Live aktif — posisikan barcode 20–30 cm dari kamera...');
-      muatDaftarKameraDanSenter_(mode);
-    })
-    .catch(errUtama => {
-      const errStr = String(errUtama || '');
-      const denied = /NotAllowedError|Permission denied|PermissionDismissed/i.test(errStr);
-
-      // Fallback terakhir tanpa batasan resolusi HD (untuk webcam laptop lama)
-      if (!denied && html5QrCode) {
-        const fallbackTarget = isMobile ? { facingMode: 'environment' } : { facingMode: 'user' };
-        html5QrCode.start(fallbackTarget, { fps: 10, disableFlip: false }, onDecodeSuccess, () => {})
-          .then(() => {
-            isCameraTransitioning = false;
-            setStatusLiveScan(mode, 'Live aktif — arahkan ke garis barcode...');
-            muatDaftarKameraDanSenter_(mode);
-          })
-          .catch(errFallback => tanganiGagalKameraLive_(mode, errFallback));
-      } else {
-        tanganiGagalKameraLive_(mode, errUtama);
-      }
-    });
+  if (decodedText && sessionId === scanSessionId) {
+    tanganiHasilScanSukses_(mode, decodedText);
+  }
 }
-function muatDaftarKameraDanSenter_(mode) {
+
+function jalankanFilterAutoEnhance_(rgba, w, h, binarize) {
+  const len = w * h;
+  const gray = new Uint8Array(len);
+  const hist = new Uint32Array(256);
+
+  for (let i = 0, p = 0; i < len; i++, p += 4) {
+    const lum = (rgba[p] * 77 + rgba[p + 1] * 150 + rgba[p + 2] * 29) >> 8;
+    gray[i] = lum;
+    hist[lum]++;
+  }
+
+  const clipLow = Math.floor(len * 0.02);
+  const clipHigh = Math.floor(len * 0.98);
+  let acc = 0, lo = 0, hi = 255;
+  for (let v = 0; v < 256; v++) {
+    acc += hist[v];
+    if (acc >= clipLow) { lo = v; break; }
+  }
+  acc = 0;
+  for (let v = 0; v < 256; v++) {
+    acc += hist[v];
+    if (acc >= clipHigh) { hi = v; break; }
+  }
+
+  const range = Math.max(12, hi - lo);
+  const lut = new Uint8Array(256);
+  for (let v = 0; v < 256; v++) {
+    const s = ((v - lo) * 255) / range;
+    lut[v] = s <= 0 ? 0 : (s >= 255 ? 255 : s | 0);
+  }
+
+  const stretched = new Uint8Array(len);
+  let sumAll = 0;
+  for (let i = 0; i < len; i++) {
+    const val = lut[gray[i]];
+    stretched[i] = val;
+    sumAll += val;
+  }
+
+  const meanThreshold = (sumAll / len) * 0.96;
+
+  for (let y = 1; y < h - 1; y++) {
+    const row = y * w;
+    for (let x = 1; x < w - 1; x++) {
+      const idx = row + x;
+      let sharp = (stretched[idx] * 6)
+        - (stretched[idx - 1] * 2)
+        - (stretched[idx + 1] * 2)
+        - stretched[idx - w]
+        - stretched[idx + w];
+
+      if (sharp < 0) sharp = 0;
+      else if (sharp > 255) sharp = 255;
+
+      const finalVal = binarize ? (sharp < meanThreshold ? 0 : 255) : sharp;
+      const p = idx << 2;
+      rgba[p] = finalVal;
+      rgba[p + 1] = finalVal;
+      rgba[p + 2] = finalVal;
+    }
+  }
+}
+
+function decodeCanvasViaZxing_(canvas) {
+  return new Promise(resolve => {
+    try {
+      canvas.toBlob(blob => {
+        if (!blob || !zxingDecoder) {
+          resolve('');
+          return;
+        }
+        const frameFile = new File([blob], 'frame.png', { type: 'image/png' });
+        zxingDecoder.scanFile(frameFile, false)
+          .then(text => resolve(text || ''))
+          .catch(() => resolve(''));
+      }, 'image/png');
+    } catch (e) {
+      resolve('');
+    }
+  });
+}
+
+function tanganiHasilScanSukses_(mode, decodedText) {
+  const now = Date.now();
+  if (now - lastScanTimestamp < SCAN_COOLDOWN_MS) return;
+  lastScanTimestamp = now;
+
+  const cleanCode = String(decodedText || '').trim();
+  if (!cleanCode) return;
+
+  if (mode === 'POS') {
+    document.getElementById('posBarcodeInput').value = cleanCode;
+    tambahKeKeranjangManual(true);
+  } else {
+    playBeep(1150, 95);
+    document.getElementById('kulakBarcode').value = cleanCode;
+    cekBarangKulakan();
+    setStatusLiveScan('KULAK', `Terpindai: ${cleanCode}`, false);
+    showToast(`Barcode "${cleanCode}" berhasil dipindai.`, 'success');
+  }
+}
+
+function muatDaftarKameraDanSenter_(mode, videoTrack) {
   const sel = document.getElementById(mode === 'POS' ? 'camSelectPOS' : 'camSelectKULAK');
   const torchBtn = document.getElementById(mode === 'POS' ? 'btnTorchPOS' : 'btnTorchKULAK');
 
-  // 1. Isi dropdown pemilih kamera (belakang/depan)
-  Html5Qrcode.getCameras().then(devices => {
-    if (!sel || !devices || devices.length === 0) return;
-    sel.innerHTML = '';
-    devices.forEach((dev, i) => {
-      const label = dev.label || `Kamera ${i + 1}`;
-      const opt = document.createElement('option');
-      opt.value = dev.id;
-      opt.textContent = label;
-      sel.appendChild(opt);
-    });
+  if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+    navigator.mediaDevices.enumerateDevices().then(allDevices => {
+      const cams = allDevices.filter(d => d.kind === 'videoinput');
+      if (!sel || cams.length === 0) return;
+      sel.innerHTML = '';
+      cams.forEach((dev, i) => {
+        const opt = document.createElement('option');
+        opt.value = dev.deviceId;
+        opt.textContent = dev.label || `Kamera ${i + 1}`;
+        sel.appendChild(opt);
+      });
+      if (activeCameraId) sel.value = activeCameraId;
+    }).catch(() => {});
+  }
 
-    // Cocokkan dengan track kamera yang sedang berjalan
-    if (activeCameraId) {
-      sel.value = activeCameraId;
-    } else {
-      const back = devices.find(d => /back|rear|belakang|environment/i.test(d.label || ''));
-      if (back) {
-        sel.value = back.id;
-        activeCameraId = back.id;
-      } else if (devices[0]) {
-        sel.value = devices[0].id;
-        activeCameraId = devices[0].id;
-      }
-    }
-  }).catch(() => {});
-
-  // 2. Cek dukungan Senter / Torch pada HP
-  if (torchBtn && html5QrCode) {
+  if (torchBtn && videoTrack && videoTrack.getCapabilities) {
     try {
-      const caps = html5QrCode.getRunningTrackCameraCapabilities
-        ? html5QrCode.getRunningTrackCameraCapabilities()
-        : null;
-      const supportsTorch = Boolean(caps && caps.torchFeature && caps.torchFeature().isSupported());
-      torchBtn.classList.toggle('d-none', !supportsTorch);
+      const caps = videoTrack.getCapabilities();
+      torchBtn.classList.toggle('d-none', !caps.torch);
     } catch (e) {
       torchBtn.classList.add('d-none');
     }
@@ -1215,30 +1445,26 @@ function muatDaftarKameraDanSenter_(mode) {
 }
 
 async function toggleSenterKamera(mode) {
-  if (!html5QrCode) return;
+  if (!liveStream) return;
+  const track = liveStream.getVideoTracks()[0];
   const torchBtn = document.getElementById(mode === 'POS' ? 'btnTorchPOS' : 'btnTorchKULAK');
   try {
-    const caps = html5QrCode.getRunningTrackCameraCapabilities();
-    if (caps && caps.torchFeature && caps.torchFeature().isSupported()) {
-      const nextState = !isTorchOn;
-      await caps.torchFeature().apply(nextState);
-      isTorchOn = nextState;
-      if (torchBtn) {
-        torchBtn.classList.toggle('btn-warning', isTorchOn);
-        torchBtn.classList.toggle('text-dark', isTorchOn);
-        torchBtn.classList.toggle('btn-outline-warning', !isTorchOn);
-      }
+    const nextState = !isTorchOn;
+    await track.applyConstraints({ advanced: [{ torch: nextState }] });
+    isTorchOn = nextState;
+    if (torchBtn) {
+      torchBtn.classList.toggle('btn-warning', isTorchOn);
+      torchBtn.classList.toggle('text-dark', isTorchOn);
+      torchBtn.classList.toggle('btn-outline-warning', !isTorchOn);
     }
   } catch (e) {
-    showToast('Senter kamera tidak didukung pada lensa ini.', 'warning');
+    showToast('Senter kamera tidak didukung pada perangkat ini.', 'warning');
   }
 }
 
 function tanganiGagalKameraLive_(mode, err) {
   isCameraTransitioning = false;
-  html5QrCode = null;
-  activeScannerMode = null;
-  activeCameraId = null;
+  hentikanScannerKamera();
   resetUiKamera_(mode);
 
   const errStr = String(err || '');
